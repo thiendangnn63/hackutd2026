@@ -2,7 +2,7 @@
 
 ## Safe default
 
-This milestone intentionally has **no network client, Photon SDK, provider webhook endpoint, model client, or public deployment**. The only HTTP listener is loopback. The environment template is ready, but secret values are not consumed. This keeps environment setup and rehearsals free of API spend.
+This milestone intentionally has **no network client, Photon SDK, provider webhook endpoint, remote model client, or public deployment**. The only HTTP listener is loopback. The environment template is ready, but secret values are not consumed. Optional satellite inference runs locally on CPU. This keeps environment setup and rehearsals free of API spend.
 
 The next milestone can implement providers behind small adapters without changing domain semantics:
 
@@ -33,3 +33,5 @@ Use synthetic/deidentified text and damage-only images. Person photos must stay 
 ## Custom satellite model handoff
 
 Training is an independent workstream. Integrate only an evaluated artifact with provenance: exact architecture/config, input channel order and normalization, class mapping, held-out split, metrics, limitations, model hash/version, and inference example. Expected output should remain an **estimated visible damage** observation with timestamp, input imagery reference, and an uncertainty/not-assessable option. Do not derive safety, occupancy, casualty counts, or person status from satellite damage. UI and evidence store can add damage estimates without altering the family case state machine.
+
+The local implementation uses a random-initialized six-channel EfficientNet-B0 on aligned pre/post RGB crops and known building boxes. Import is checksum-verified, never executes code from the bundle, and verifies a real CPU prediction against the cached held-out output before enabling the browser's local inference action. The browser accepts only bundled tile/building IDs, never paths or shell commands. Historical Harvey imagery and estimated damage remain visibly separate from the fictional family exercise; reference labels are not presented as model output.

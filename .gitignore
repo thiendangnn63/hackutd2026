@@ -7,3 +7,7 @@ coverage/
 .DS_Store
 *.log
 artifacts/
+
+.venv/
+__pycache__/
+*.pyc

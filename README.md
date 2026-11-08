@@ -6,7 +6,7 @@ A working **local, fictional disaster-response demo** for the grandparents inqui
 
 ## Run
 
-Requires Node.js **22 or later**. There are no runtime or development dependencies to download.
+The core app requires Node.js **22 or later** and has no JavaScript dependencies. Optional local satellite inference uses the Python dependencies listed below.
 
 ```sh
 cp .env.example .env
@@ -41,6 +41,9 @@ The scenario clock is fixed at **2026-11-07 14:30 UTC**. Observation and last-lo
 - `src/domain.js`: fixtures, validation, recipient policy, case transitions, deterministic commands, explicitly simulated extraction, and outbox.
 - `src/store.js`: atomic local JSON persistence. A failed action does not partially mutate the state. File writes are restricted to owner access.
 - `src/server.js`: local HTTP API and static app. Same-origin mutations, strict loopback Host validation, body limits, and restrictive browser security headers.
+- `src/satellite.js`: historical evidence and tightly scoped optional local inference, independent of family cases.
+- `scripts/import_model.py`: checksum-verified model import and local inference verification.
+- `training/`: reproducible from-scratch Kaggle training, local inference, and training tests.
 - `public/`: dependency-free responsive web UI.
 - `test/`: executable behavior/security regression tests.
 - `docs/API.md`: shared frontend/backend contract.
@@ -50,11 +53,11 @@ The local data file `.data/state.json` and `.env` are ignored by Git. The app do
 
 ## What works versus what is pending
 
-**Implemented:** local case intake; stored reports; scoped dry-run recipient selection; simulated SMS inquiry/acknowledgment/family updates; source/time-linked observations; duplicate suppression; opt-out; officer evidence review; separate assistance state; restart persistence; reset; and a browser console.
+**Implemented:** local case intake; stored reports; scoped dry-run recipient selection; simulated SMS inquiry/acknowledgment/family updates; source/time-linked observations; duplicate suppression; opt-out; officer evidence review; separate assistance state; restart persistence; reset; and a browser console. An optional historical satellite panel supports verified model bundles, cached predictions, and local inference when checkpoint verification passes.
 
 **Simulated:** emergency alert, every SMS, model extraction, all people/locations, and the officer identity. The extraction parser recognizes scripted examples and conservatively routes other input to review. It is not suitable for real incoming reports.
 
-**Not integrated:** Photon provisioning or webhooks, real send/reply/delivery tests, Lightning/Nano Omni inference, satellite/image analysis, custom training/model results, real authentication/roles, secure photo uploads, retention policy, agency authorization, and production deployment. This milestone does not satisfy the live-SMS acceptance criterion yet.
+**Not integrated:** Photon provisioning or webhooks, real send/reply/delivery tests, Lightning/Nano Omni inference, arbitrary satellite or resident-photo uploads, real authentication/roles, secure photo uploads, retention policy, agency authorization, and production deployment. This milestone does not satisfy the live-SMS acceptance criterion yet. Satellite predictions are available only after a trusted trained bundle is imported locally.
 
 ## Before any real integration
 
@@ -63,3 +66,26 @@ Keep credentials in the git-ignored `.env`, never in chat, frontend files, a not
 Live messaging needs the exact Photon product/API and number verified, secure webhook authentication, consented test recipients, message content/purpose, and an explicit total spending limit within available credits. Existing credits are not a guarantee of zero charges. Live model inference likewise needs account access, input restrictions, and cost approval confirmed. The offline demo will continue to work without them.
 
 Do not expose this server publicly. Demo role selection is not authorization. Production requires authenticated users, case-scoped access controls, secure identifiers, protected storage, data minimization/retention, rate limiting, audit controls, and an approved incident/verification policy.
+
+## Optional trained satellite model
+
+The satellite panel is separate from the fictional family exercise. It uses historical Hurricane Harvey 2017 pre/post satellite pairs with known building boxes. It does not accept resident ground photos or affect welfare/assistance states. Missing bundles produce an honest unavailable state.
+
+`training/` contains the from-scratch EfficientNet-B0 pipeline and self-contained Kaggle notebook. The notebook is intended for a private Kaggle run within existing free quota. Local inference is optional and uses CPU only. To prepare it with an existing Python 3.12 installation:
+
+```sh
+uv venv --python python3.12 .venv
+uv pip install --python .venv/bin/python --index-url https://pypi.org/simple -r training/requirements-local.txt
+npm run test:training
+npm run test:model-import
+```
+
+Import only a trusted project-produced bundle, using its separately verified SHA-256:
+
+```sh
+npm run import:model -- /absolute/path/utd_xbd_model.zip --sha256 VERIFIED_BUNDLE_SHA256
+```
+
+The importer checks archive paths, per-file checksums, completed training, model contract, held-out predictions, probabilities, and crop bounds. It stores weights/images under git-ignored `.data/models/`, without changing the family exercise. The app never executes Python code from the archive. The importer loads the checkpoint through the repository's reviewed inference code with `torch.load(weights_only=True)` and compares a real local prediction with cached held-out output. Live inference remains disabled if this verification fails. The browser can run another local inference on a selected bundled crop, with a one-job limit and timeout.
+
+All results remain estimates. Scores are uncalibrated. The panel exposes held-out macro F1, per-class F1/support, and a majority baseline; do not conceal weak or absent-class results. Tile-disjoint data from a single event does not prove generalization. Reference labels are excluded from the displayed prediction contract. xBD imagery has CC BY-NC-SA 4.0 noncommercial/share-alike requirements; see training/README.md and bundle attribution.

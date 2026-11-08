@@ -136,3 +136,134 @@ $('#reset-confirm').addEventListener('click',()=>mutate('/api/reset',{},'Fiction
 }));
 $('#retry').addEventListener('click',load);
 load();
+
+// Satellite data has its own request/state path; never feed it to family-state mutations.
+const satelliteClasses = ['no-damage','minor-damage','major-damage','destroyed'];
+let satelliteData = null;
+let satelliteTileId = null;
+let satelliteBuildingId = null;
+let satellitePending = false;
+let satelliteError = '';
+const satelliteInferences = new Map();
+async function satelliteRequest(path, payload) {
+  const response = await fetch(path, payload === undefined ? {cache:'no-store'} : {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  let body;
+  try { body = await response.json(); } catch { throw new Error('Satellite evidence returned an unreadable response.'); }
+  if (!response.ok) throw new Error(body.error || `Satellite request failed (${response.status}).`);
+  return body;
+}
+async function loadSatellite() {
+  const root = $('#satellite-content');
+  root.replaceChildren(el('p','empty','Checking for an imported trained model…'));
+  try { const next = await satelliteRequest('/api/satellite'); if (next.model?.sha256 !== satelliteData?.model?.sha256) satelliteInferences.clear(); satelliteData = next; satelliteError = ''; renderSatellite(); }
+  catch (error) {
+    root.replaceChildren(el('h3','','Satellite evidence unavailable'),el('p','panel-intro',error.message));
+    const retry = el('button','button small','Retry satellite evidence'); retry.type='button'; retry.addEventListener('click',loadSatellite); root.append(retry);
+  }
+}
+function satellitePercent(value) { return typeof value === 'number' && Number.isFinite(value) ? `${(value*100).toFixed(1)}%` : 'Not reported'; }
+function satelliteKey(tileId, buildingId) { return JSON.stringify([tileId,buildingId]); }
+function satelliteImage(tile, building, phase) {
+  const figure = el('figure','satellite-image');
+  figure.append(el('figcaption','',phase === 'pre' ? 'Before Hurricane Harvey · 2017' : 'After Hurricane Harvey · 2017'));
+  const src = phase === 'pre' ? tile.preImageUrl : tile.postImageUrl;
+  let url;
+  try { url = new URL(src,location.origin); } catch { /* Invalid URLs are not rendered. */ }
+  if (typeof src !== 'string' || !url || url.origin !== location.origin || !url.pathname.startsWith('/api/satellite/')) {
+    figure.append(empty('Image unavailable.')); return figure;
+  }
+  const frame = el('div','satellite-image-frame');
+  const image = el('img'); image.src=url.href; image.alt=`Historical ${phase === 'pre' ? 'before' : 'after'} satellite image, tile ${tile.id}`; image.width=tile.width; image.height=tile.height;
+  image.addEventListener('error',()=>frame.replaceChildren(empty('Image could not be loaded. No substitute imagery is shown.')),{once:true});
+  frame.append(image);
+  const box = building?.box;
+  if (Number.isFinite(tile.width) && tile.width>0 && Number.isFinite(tile.height) && tile.height>0 && Array.isArray(box) && box.length===4 && box.every(Number.isFinite) && box[0]>=0 && box[1]>=0 && box[2]<=tile.width && box[3]<=tile.height && box[2]>box[0] && box[3]>box[1]) {
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('viewBox',`0 0 ${tile.width} ${tile.height}`); svg.setAttribute('aria-hidden','true');
+    const rect=document.createElementNS(svg.namespaceURI,'rect');
+    for (const [key,value] of Object.entries({x:box[0],y:box[1],width:box[2]-box[0],height:box[3]-box[1]})) rect.setAttribute(key,String(value));
+    rect.setAttribute('vector-effect','non-scaling-stroke'); svg.append(rect); frame.append(svg);
+  }
+  figure.append(frame); return figure;
+}
+function satellitePrediction(prediction, title) {
+  const card=el('article','satellite-result'); card.append(el('h3','',title));
+  if (!prediction || prediction.state!=='estimated' || !['cached_model_output','local_model_inference'].includes(prediction.source) || !satelliteClasses.includes(prediction.damageClass)) {
+    card.append(empty('No valid model estimate available.')); return card;
+  }
+  card.append(tag(`Estimated: ${prediction.damageClass}`,'amber'),el('p','fine-print','Uncalibrated model probabilities, not confidence in safety.'));
+  const list=el('dl','satellite-probabilities');
+  satelliteClasses.forEach((name,index)=>{ list.append(el('dt','',name),el('dd','',satellitePercent(Array.isArray(prediction.probabilities)?prediction.probabilities[index]:prediction.probabilities?.[name]))); });
+  card.append(list);
+  if (prediction.source==='local_model_inference') card.append(el('p','fine-print',`Computed ${formatTime(prediction.computedAt)} · ${Number.isFinite(prediction.durationMs)?prediction.durationMs+' ms':'duration not reported'}`),el('p','fine-print satellite-hash',`Model SHA-256: ${prediction.modelSha256 || 'Not reported'}`));
+  return card;
+}
+function renderSatellite() {
+  const root=$('#satellite-content'); root.replaceChildren();
+  if (!satelliteData?.available) {
+    root.append(el('h3','','Trained model not imported yet'),el('p','panel-intro',satelliteData?.reason || 'No trained model results or imagery are available.'));
+    const refresh=el('button','button small','Check for imported model'); refresh.type='button'; refresh.addEventListener('click',loadSatellite); root.append(refresh); return;
+  }
+  const tiles=Array.isArray(satelliteData.tiles)?satelliteData.tiles:[];
+  const tile=tiles.find(t=>t.id===satelliteTileId) || tiles[0]; satelliteTileId=tile?.id;
+  const buildings=Array.isArray(tile?.buildings)?tile.buildings:[];
+  const building=buildings.find(b=>b.id===satelliteBuildingId) || buildings[0]; satelliteBuildingId=building?.id;
+  const controls=el('div','satellite-controls');
+  for (const [title,items,selected,onChange] of [
+    ['Held-out satellite tile',tiles,tile?.id,value=>{satelliteTileId=value;satelliteBuildingId=null;}],
+    ['Known building crop',buildings,building?.id,value=>{satelliteBuildingId=value;}]
+  ]) {
+    const wrapper=el('label','',title); const select=el('select');
+    select.replaceChildren(...items.map(item=>{const option=el('option','',item.id);option.value=item.id;return option;})); select.value=selected || ''; select.disabled=satellitePending || !items.length;
+    select.addEventListener('change',()=>{onChange(select.value);satelliteError='';renderSatellite();}); wrapper.append(select);controls.append(wrapper);
+  }
+  root.append(controls);
+  if (tile) {
+    const pair=el('div','satellite-pair'); pair.append(satelliteImage(tile,building,'pre'),satelliteImage(tile,building,'post'));root.append(pair);
+    root.append(el('p','fine-print',building?`Outline: selected building crop ${building.id} only. The box is supplied, not detected by the classifier.`:'No building crops available for this tile.'));
+  } else root.append(empty('No held-out image tiles are available.'));
+  if (building) {
+    const results=el('div','satellite-results');results.append(satellitePrediction(building,'Cached model output'));
+    const live=satelliteInferences.get(satelliteKey(tile.id,building.id)); if(live)results.append(satellitePrediction(live,'Local model inference'));
+    root.append(results);
+    const infer=el('button','button small',satellitePending?'Running local inference…':'Run local inference on this crop');infer.type='button';infer.disabled=satellitePending || !satelliteData.liveInferenceAvailable;
+    infer.addEventListener('click',()=>runSatelliteInference(tile.id,building.id));root.append(infer);
+    const status=el('p','fine-print',satellitePending?'Computing locally. Family-case state is unchanged.':satelliteData.liveInferenceAvailable?'Uses the imported model and selected historical before/after crop locally.':'Local inference unavailable. Only cached model outputs are shown.');status.setAttribute('role','status');root.append(status);
+  }
+  if(satelliteError){const error=el('p','notice error',satelliteError);error.setAttribute('role','alert');root.append(error);}
+  renderSatelliteMetadata(root);
+}
+function renderSatelliteMetadata(root) {
+  const model=satelliteData.model || {}; const metrics=satelliteData.metrics || {};
+  const detail=el('details','satellite-metadata');detail.append(el('summary','','Model, held-out evaluation, and limitations'));
+  detail.append(el('p','fine-print',`${model.architecture || 'Architecture not reported'} · Best epoch: ${model.bestEpoch ?? 'Not reported'}`),el('p','fine-print satellite-hash',`Model SHA-256: ${model.sha256 || 'Not reported'}`));
+  detail.append(el('p','panel-intro',`Held-out macro F1: ${satellitePercent(metrics.macroF1)} · Majority baseline macro F1: ${satellitePercent(metrics.majorityMacroF1)} · Accuracy: ${satellitePercent(metrics.accuracy)}`));
+  const perClass=metrics.perClass;
+  const rows=Array.isArray(perClass)?perClass.map((row,index)=>[row.class || row.label || satelliteClasses[index],row]):Object.entries(perClass || {});
+  const weak=rows.filter(([,row])=>Number.isFinite(row.f1) && row.f1<0.5 && row.support>0);
+  if(weak.length) root.append(el('p','notice',`Research demo only. Low held-out F1: ${weak.map(([name,row])=>`${name} ${satellitePercent(row.f1)}`).join('; ')}. Predictions require independent review.`));
+  for(const [name,row] of rows) detail.append(el('p','fine-print',`${name}: F1 ${satellitePercent(row.f1)} · Support ${row.support ?? 'Not reported'}`));
+  if (!rows.length) detail.append(el('p','fine-print','Per-class evaluation not reported.'));
+  const list=el('ul','satellite-limitations');
+  list.append(el('li','','Single-event, tile-disjoint evaluation does not establish performance on other disasters.'));
+  for(const limitation of satelliteData.limitations || [])list.append(el('li','',limitation));
+  detail.append(list);root.append(detail);
+  const attribution=satelliteData.attribution || {};
+  root.append(el('p','fine-print',`${attribution.dataset || 'xBD / xView2'} · ${Array.isArray(attribution.authors)?attribution.authors.join(', '):attribution.authors || 'Gupta et al.; DIU, CMU SEI and collaborators; Maxar imagery'}`),el('p','fine-print',`License: ${attribution.license || 'CC BY-NC-SA 4.0'}. Noncommercial use only; attribution and applicable share-alike terms required.`));
+  for (const [title,value] of [['Dataset source',attribution.source],['License terms',attribution.license_url]]) {
+    if (typeof value !== 'string') continue;
+    let url;try {url=new URL(value);}catch{continue;}
+    if(url.protocol!=='https:')continue;
+    const link=el('a','satellite-source',title);link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';root.append(link);
+  }
+}
+async function runSatelliteInference(tileId,buildingId) {
+  if(satellitePending || !satelliteData?.liveInferenceAvailable)return;
+  satellitePending=true;satelliteError='';renderSatellite();
+  try {
+    const result=await satelliteRequest('/api/satellite/infer',{tileId,buildingId});
+    if(result.prediction?.source!=='local_model_inference' || result.prediction?.state!=='estimated')throw new Error('No valid local inference result was returned.');
+    satelliteInferences.set(satelliteKey(tileId,buildingId),result.prediction);
+  }catch(error){satelliteError=error.message;}
+  finally{satellitePending=false;renderSatellite();}
+}
+loadSatellite();

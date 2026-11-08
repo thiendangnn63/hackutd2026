@@ -164,3 +164,23 @@ test('objects and unclear pronouns cannot create a person sighting or family rea
     assert.equal(result.outbox.filter((m) => m.kind === 'family_update').length, 0);
   }
 });
+test('possessions, indirect names, media and mixed objects cannot be family sighting evidence', () => {
+  for (const text of [
+    "I saw Rosa's tree at Oak School.", 'I saw Rosa’s tree at Oak School.',
+    'I saw a tree near Rosa at Oak School.', 'I saw a tree at Oak School near Miguel.',
+    'I saw a photograph of Rosa and Miguel at Oak School.', 'I saw Rosa and Miguel Santos\' car at Oak School.',
+    'I saw Rosa and a tree at Oak School.', 'I saw Rosa holding a photo of Miguel at Oak School.',
+    'I saw someone named Rosa at Oak School.', "They're here near Rosa at Oak School.",
+  ]) {
+    const {store,caseId}=setup();const result=store.act(receiveReport,reportInput(caseId,{text}));const report=result.reports[0];
+    assert.equal(report.text,text);assert.equal(report.processingState,'needs_review',text);assert.ok(report.reviewFlags.includes('sighting_subject_needs_clarification'),text);
+    assert.ok(!report.observations.some(o=>o.type==='sighting'),text);assert.equal(result.cases[0].locationState,'unknown',text);assert.equal(result.cases[0].welfareState,'unknown');
+    assert.ok(!result.outbox.some(m=>m.kind==='family_update'),text);unchanged(store,()=>store.act(verifyCase,caseId,verifyInput(result.reportId)));
+  }
+});
+test('scripted direct named subjects retain the grandparents sighting happy path', () => {
+  for (const text of ['I saw Rosa and Miguel at Oak School.', 'I can see Rosa and Miguel Santos near Oak School.', 'I saw Rosa at Oak School.', 'I saw Miguel Santos at Oak School.', 'I saw Rosa and Miguel.', 'C105: I saw Rosa and Miguel at Oak School.']) {
+    const {store,caseId}=setup();const result=store.act(receiveReport,reportInput(caseId,{text}));assert.ok(result.reports[0].observations.some(o=>o.type==='sighting'),text);
+    assert.equal(result.cases[0].locationState,'unverified_sighting');assert.equal(result.cases[0].welfareState,'unknown');assert.equal(result.outbox.filter(m=>m.kind==='family_update').length,1);
+  }
+});

@@ -20,3 +20,11 @@ Endpoints:
 - POST /api/reset `{}`. Resets fictional state, no external effects.
 
 Seed: Mom (`mom`); eligible contributors `neighbor-1` in A1 and `neighbor-2` in A2. Other fixtures illustrate stale, opted-out, outside-area exclusions. Case `C104` (unanswered Elena Brooks case) remains open; grandparents flow creates C105. Subject demo names: Rosa and Miguel Santos. Example report: `I saw Rosa and Miguel at Oak School. They need water for two people and the road is blocked.` Include observed timestamp separately. Corrections/negations enter review without asserting positive facts. The extractor is explicitly simulated, not a Nemotron call. Zero API calls or cost.
+
+## Optional satellite model integration
+
+This is a separate historical imagery panel. It never mutates family case state.
+
+- GET /api/satellite: availability, model provenance, held-out metrics, attribution, demo tile pairs and building predictions. Building estimates use only model damage_class/probabilities; reference_label is intentionally stripped. Before import: available=false, no fabricated tiles/predictions.
+- GET /api/satellite/images/:filename: PNG from the imported tile-pair allowlist only. No arbitrary file paths.
+- POST /api/satellite/infer `{tileId,buildingId}`: real local CPU inference for one existing bundled crop. Requires successful checkpoint validation, same-origin request, unchanged model checksum, and at most one in-flight request. No shell command interpolation. Returns prediction with source=local_model_inference, estimated state, uncalibrated probabilities, duration and model hash. Cached outputs are source=cached_model_output.

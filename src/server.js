@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import { InputError, openCase, sendOutreach, receiveReport, verifyCase, setConsent } from './domain.js';
 import { Store } from './store.js';
+import { SatelliteService } from './satellite.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'] };
@@ -21,7 +22,7 @@ async function body(req) {
     return value;
   } catch { throw new InputError('Expected a JSON object.'); }
 }
-export function createApp(store = new Store(resolve(root, '.data/state.json'))) {
+export function createApp(store = new Store(resolve(root, '.data/state.json')), satellite = new SatelliteService(root)) {
   return createServer(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -36,9 +37,15 @@ export function createApp(store = new Store(resolve(root, '.data/state.json'))) 
       const url = new URL(req.url, `http://${req.headers.host}`);
       if (req.method === 'GET' && url.pathname === '/api/state') return json(200, store.read());
       if (req.method === 'GET' && url.pathname === '/api/health') return json(200, { ok: true, mode: 'simulation', liveSendingEnabled: false });
+      if (req.method === 'GET' && url.pathname === '/api/satellite') return json(200, satellite.status());
+      if (req.method === 'GET' && url.pathname.startsWith('/api/satellite/images/')) {
+        const data = satellite.image(url.pathname.slice('/api/satellite/images/'.length));
+        res.writeHead(200, { 'Content-Type':'image/png' }); res.end(data); return;
+      }
       if (req.method === 'POST') {
         if (!req.headers.origin) throw new InputError('Same-origin requests are required for mutations.', 403);
         const input = await body(req);
+        if (url.pathname === '/api/satellite/infer') return json(200, await satellite.infer(input));
         if (url.pathname === '/api/cases') return json(201, store.act(openCase, input));
         if (url.pathname === '/api/reports') return json(200, store.act(receiveReport, input));
         if (url.pathname === '/api/reset') return json(200, store.reset());

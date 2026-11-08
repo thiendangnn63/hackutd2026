@@ -108,9 +108,16 @@ export function extractSimulated(text, subjectNames = null) {
   const location = text.match(/\b(?:at|near)\s+(Oak School|Oak Street|Maple Clinic|River Park)\b/i)?.[1] || null;
   const sighting = text.match(/\b(?:I saw|I can see|they are here|they're here)\b[^.!?]*/i);
   if (sighting) {
-    const subjectWords = (subjectNames || '').toLowerCase().match(/[a-z]{3,}/g)?.filter((word) => !['and', 'the'].includes(word)) || [];
-    const mentionedWords = sighting[0].toLowerCase().match(/[a-z]+/g) || [];
-    if (subjectWords.some((word) => mentionedWords.includes(word))) add('sighting', 'Community member reports a sighting; identity and welfare unverified.', sighting[0], null, location);
+    // Deliberately narrow fixture grammar: the direct object must consist only of
+    // case subject names, followed by a known place or the end of the statement.
+    // A name elsewhere in the span (or a possessive name) is not person evidence.
+    const normalize = (value) => value.trim().toLowerCase().replace(/\s+/g, ' ');
+    const subjects = normalize(subjectNames || '').split(/\s+and\s+|\s*&\s*|\s*,\s*/).filter(Boolean);
+    const aliases = new Set(subjects.flatMap((name) => [name, name.split(' ')[0]]));
+    const direct = sighting[0].match(/^I (?:saw|can see)\s+(.+?)(?:\s+(?:at|near)\s+(?:Oak School|Oak Street|Maple Clinic|River Park))?\s*$/i);
+    const namedObjects = direct ? normalize(direct[1]).split(/\s+and\s+|\s*&\s*|\s*,\s*/) : [];
+    const clearSubject = namedObjects.length > 0 && namedObjects.every((name) => aliases.has(name));
+    if (clearSubject) add('sighting', 'Community member reports a sighting; identity and welfare unverified.', sighting[0], null, location);
     else reviewFlags.push('sighting_subject_needs_clarification');
   }
   const safe = text.match(/\bI am safe\b/i);
