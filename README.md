@@ -71,6 +71,8 @@ Do not expose this server publicly. Demo role selection is not authorization. Pr
 
 The satellite panel is separate from the fictional family exercise. It uses historical Hurricane Harvey 2017 pre/post satellite pairs with known building boxes. It does not accept resident ground photos or affect welfare/assistance states. Missing bundles produce an honest unavailable state.
 
+The first trained bundle has been verified locally, including actual checkpoint inference and browser operation. See [the model card](docs/MODEL_CARD.md) for provenance, held-out scores, weak-class limitations, and verification details. The bundle is not stored in Git.
+
 `training/` contains the from-scratch EfficientNet-B0 pipeline and self-contained Kaggle notebook. The notebook is intended for a private Kaggle run within existing free quota. Local inference is optional and uses CPU only. To prepare it with an existing Python 3.12 installation:
 
 ```sh
