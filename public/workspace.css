@@ -14,3 +14,112 @@ html{scroll-behavior:auto}body{font-family:-apple-system,BlinkMacSystemFont,'Hel
 @media(max-width:760px){.map-workspace:has(.map-detail:not([hidden])) .map-zoom-controls{bottom:calc(46% + 60px)}.map-workspace:has(.map-detail:not([hidden])) .map-fit{bottom:calc(46% + 155px)}.map-workspace:has(.map-detail:not([hidden])) .map-compass{display:none}}
 
 @media(max-width:420px){.wordmark>.pill{display:none}}
+
+/* Second pass: quieter navigation, readable records, and deliberate master/detail views. */
+.records-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 18px}
+.record-filters{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.filter-chip{border:1px solid transparent;background:transparent;color:#7d897e;font-size:11px;padding:7px 12px;border-radius:6px;min-height:34px}
+.filter-chip:hover{background:#f0f4ef}
+.filter-chip[aria-pressed=true]{background:#fff;border-color:#dfe7dc;color:#37553e;box-shadow:0 1px 3px #27422d04}
+.results-count{font-size:10px;color:#8c9689;white-space:nowrap}
+.search-clear{width:24px;height:24px;flex:none;color:#8b978c;padding:5px}
+.search-clear svg{width:14px;height:14px}
+.people-layout,.messages-layout{height:calc(100dvh - 326px);min-height:430px;align-items:stretch}
+.people-list,.thread-list{overflow:auto;overscroll-behavior:contain;min-height:0;scrollbar-width:thin;scrollbar-color:#dce4d7 transparent}
+.people-list{padding:8px 12px}
+.person-row{gap:11px;padding:16px 10px;border-radius:6px;margin-bottom:1px;position:relative}
+.person-row[aria-pressed=true]{background:#edf4ee;box-shadow:inset 2px 0 #65866b}
+.person-row strong{font-size:12px;line-height:1.5}
+.person-copy{min-width:0;flex:1}
+.person-copy small{font-size:10px;line-height:1.6;color:#7f8b7c}
+.person-copy .match-context{font-size:9px;color:#9c8870}
+.needs-indicator{width:6px;height:6px;border-radius:50%;background:#ca9866;flex:none}
+.person-record{overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#dce4d7 transparent;padding:27px 30px}
+.person-record:focus,.conversation:focus{outline:none}
+.record-profile{display:flex;align-items:center;gap:14px;margin-bottom:15px}
+.record-profile .person-avatar{margin:0;width:47px;height:47px;font-size:14px}
+.record-profile .view-kicker{margin-bottom:5px;font-size:9px}
+.record-profile h2{font-size:22px;margin:0;line-height:1.4}
+.person-meta{margin:0 0 14px;gap:6px}
+.pill.amber{background:#fff7ed;color:#a67d47;border-color:#f1e2cb}
+.record-description{font-size:12px;color:#768370;line-height:1.9;max-width:680px;margin-bottom:13px}
+.person-case-links{display:flex;flex-wrap:wrap;gap:7px;margin:13px 0 3px}
+.case-link{display:inline-flex;align-items:center;gap:7px;border:1px solid #e1e9dd;background:#fafcf8;padding:8px 10px;border-radius:6px;font-size:10px;color:#637b5a;text-align:left}
+.case-link:hover{background:#eff5eb}
+.case-link svg{width:13px;height:13px}
+.assistance-callout{display:flex;align-items:center;gap:9px;border:1px solid #f0e2ce;background:#fffbf4;border-radius:7px;padding:11px 13px;font-size:11px;color:#a38051;margin-top:18px;line-height:1.6}
+.assistance-callout svg{width:16px;height:16px}
+.record-section{margin-top:22px;padding-top:20px}
+.record-section h3{font-size:11px;letter-spacing:.1px;color:#53664b;margin-bottom:15px}
+.record-event strong{font-size:11px;line-height:1.7;color:#546a4e}
+.record-event p{font-size:12px;color:#76866c;line-height:1.9;margin-top:5px}
+.record-event small{font-size:9px;line-height:1.8;color:#8c9983;margin-top:7px}
+.record-empty{line-height:1.8;font-size:11px}
+.current-review .record-event{border-left-color:#bfd0b4}
+.record-disclaimer{font-size:10px;line-height:1.8;color:#95a08c;margin:22px 0 0;padding-top:16px;border-top:1px solid var(--line)}
+.mobile-record-back{display:none}
+.thread-list{padding:8px 12px}
+.thread-row{padding:18px 10px;border-radius:6px;margin-bottom:2px}
+.thread-row[aria-pressed=true]{background:#eff5ed;box-shadow:inset 2px 0 #6a8966}
+.thread-row-heading{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.thread-event-count{background:#e8efe2;color:#6d855e;padding:2px 5px;border-radius:4px;font-size:9px}
+.thread-row strong{line-height:1.6}
+.thread-row small{font-size:10px;color:#8c9a80;line-height:1.7}
+.thread-preview{font-size:11px;line-height:1.8;margin:9px 0 0;color:#8b9880;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.conversation{height:100%;min-height:0}
+.conversation-heading{padding:20px 24px;background:#fff;flex:none;gap:11px}
+.conversation-heading>div{flex:1;min-width:0}
+.conversation-heading h2{font-size:17px;line-height:1.6}
+.conversation-heading p{font-size:10px;color:#8d9a81;line-height:1.6}
+.conversation-events{min-height:0;max-height:none;background:#fcfdfb;padding:22px 26px;gap:16px;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#dce4d7 transparent}
+.conversation-date{align-self:center;border:1px solid #e8ede3;border-radius:20px;padding:3px 11px;font-size:9px;color:#93a085;background:#fff;margin:0 0 5px}
+.message-bubble{border:1px solid #e8ede2;background:#fff;max-width:86%;box-shadow:0 1px 3px #2b422303;padding:14px 16px}
+.message-bubble.outgoing{background:#f0f5ec;border-color:#e3ebdc}
+.message-bubble p{font-size:12px;line-height:1.85;color:#647a57;margin:8px 0}
+.message-bubble strong{font-size:10px;font-weight:600;color:#648253}
+.message-bubble small{display:block;font-size:9px;line-height:1.8;color:#98a48c;margin-top:5px}
+.message-kind{font-size:9px;color:#8ba078;line-height:1.7}
+.conversation-footer{flex:none;background:#fff;padding:15px 24px;font-size:10px;line-height:1.7;gap:10px}
+.conversation-footer .control{white-space:nowrap;font-size:10px;min-height:34px}
+.archive-pair{cursor:ew-resize}
+@media(max-width:1100px){.people-layout{grid-template-columns:270px minmax(0,1fr)}.record-profile{align-items:flex-start}.record-profile h2{font-size:20px}.person-record{padding:24px}.message-bubble{max-width:95%}.conversation-heading{padding:17px 20px}.conversation-events{padding:19px}.conversation-heading .pill{font-size:9px}}
+@media(max-width:760px){
+ .records-toolbar{align-items:flex-start;margin-bottom:13px;gap:7px}.record-filters{gap:2px;flex:1;flex-wrap:nowrap;overflow:auto}.filter-chip{padding:7px 9px;font-size:10px;white-space:nowrap}.results-count{font-size:9px;padding-top:9px}
+ .people-layout,.messages-layout{height:auto;min-height:0;display:block;overflow:hidden}
+ .people-list,.thread-list{max-height:none;border:0;padding:7px 11px;overflow:visible}
+ .person-row{padding:17px 8px}.person-row strong{font-size:12px}.person-avatar{width:36px;height:36px}
+ .people-layout:not(.is-detail) .person-record,.messages-layout:not(.is-detail) .conversation{display:none}
+ .people-layout.is-detail .people-list,.messages-layout.is-detail .thread-list{display:none}
+ .people-layout.is-detail .person-record{display:block;padding:19px;overflow:visible}
+ .mobile-record-back{display:inline-flex;margin:0 0 19px;align-items:center;gap:5px;font-size:10px}.mobile-record-back svg{transform:rotate(180deg);width:14px;height:14px}
+ .record-profile{gap:11px}.record-profile .person-avatar{height:42px;width:42px}.record-profile h2{font-size:21px}.record-profile .view-kicker{font-size:8px}.record-description{font-size:11px}.record-event p{font-size:11px}
+ .messages-layout.is-detail .conversation{display:flex;min-height:calc(100dvh - 360px)}
+ .conversation-heading{padding:17px 15px}.conversation-heading .mobile-record-back{margin:0;padding:5px;width:26px;height:30px}.conversation-heading h2{font-size:15px}.conversation-heading p{font-size:9px}.conversation-heading .pill{font-size:8px;padding:3px 5px}
+ .conversation-events{overflow:visible;max-height:none;padding:19px 15px;gap:15px;min-height:200px}.message-bubble{max-width:95%;padding:12px 13px}.message-bubble p{font-size:11px;line-height:1.9}.message-bubble small{font-size:8px}.conversation-footer{padding:14px 15px;font-size:9px}.conversation-footer .control{font-size:9px;padding:7px 9px}
+}
+
+/* Map details retain their context through redraws and subdivision. */
+.operations-heading{position:relative}
+.desktop-panel-close{position:absolute;right:9px;top:11px;color:#9aa793;width:29px;height:29px;padding:7px}
+.desktop-panel-close svg{width:14px;height:14px;transform:rotate(180deg)}
+.map-workspace.overview-collapsed .operations-panel{display:none}
+.map-workspace.overview-collapsed .mobile-panel-toggle{display:flex;left:22px;top:22px;z-index:5;box-shadow:var(--shadow)}
+.map-workspace.overview-collapsed .map-legend-card{left:22px}
+.map-breadcrumb{position:absolute;top:22px;left:343px;display:flex;align-items:center;gap:5px;padding:7px 10px;z-index:3;max-width:calc(100% - 695px);min-height:38px;font-size:10px;color:#72876b;white-space:nowrap}
+.map-breadcrumb>svg{width:12px;height:12px;color:#a4b29b}
+.breadcrumb-button{background:transparent;border:0;padding:3px 2px;font-size:10px;color:#778d6b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.breadcrumb-button:hover{color:#3e6632}
+.breadcrumb-current{font-weight:600;font-size:10px}
+.map-workspace.overview-collapsed .map-breadcrumb{left:148px;max-width:calc(100% - 500px)}
+.map-subtile.is-selected{stroke:#2e5231;stroke-width:2.5;outline:none}
+.map-region.is-selected{stroke:#2e5231!important}
+.map-tooltip{color:#536b47;font-size:11px}
+.map-tooltip span{font-size:10px;color:#8b9a7f}
+.detail-breakdown{gap:11px;font-size:11px}
+@media(min-width:1600px){.map-breadcrumb{left:364px}}
+@media(max-width:1100px){.map-breadcrumb{left:302px;max-width:calc(100% - 650px)}}
+@media(min-width:761px) and (max-width:1050px){.map-breadcrumb{top:70px;right:16px;left:auto;max-width:calc(100% - 330px)}.map-workspace.overview-collapsed .map-breadcrumb{top:70px;left:auto;max-width:calc(100% - 200px)}}
+@media(max-width:760px){.desktop-panel-close{display:none}.map-workspace.overview-collapsed .mobile-panel-toggle{left:12px;top:12px}.map-breadcrumb{left:12px;top:58px;max-width:calc(100% - 160px);padding:5px 8px;min-height:28px;gap:3px;font-size:9px}.breadcrumb-button,.breadcrumb-current{font-size:9px}.map-breadcrumb>svg{width:10px;height:10px}.map-workspace.overview-collapsed .map-breadcrumb{left:12px;max-width:calc(100% - 160px)}.map-workspace.panel-open .map-breadcrumb{display:none}.map-workspace.overview-collapsed.panel-open .operations-panel{display:flex}.detail-breakdown{font-size:10px;gap:8px 11px}}
+.search-input input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+.record-filters{min-width:0}
+.map-workspace.overview-collapsed .mobile-panel-toggle{position:absolute}

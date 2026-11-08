@@ -31,3 +31,19 @@ Verified in a real browser: desktop map render and pan; neighborhood and subtile
 ## Lessons for follow-up work
 
 Screen-space map annotations must scale inversely with camera zoom; otherwise labels and hatching overwhelm the map. Mobile detail cards must reserve reachable map controls. Report observation time must not be used as conversation delivery order: show it separately and order incoming messages by receipt time. Synthetic subdivision must conserve parent/category totals and must never silently become purported geocoding. Additional city imagery needs a real extent/CRS/acquisition contract before it can join a geographic history selector.
+
+
+## Iteration 2 · continuous UI refinement
+
+The owner requested an ongoing review → improve → verify loop. This pass improves the map and record workflows while preserving existing integration boundaries.
+
+- Messages and People now have scoped filters, clearer counts, stronger name ranking, retained keyboard focus/list position, and mobile list/detail navigation with back buttons. Conversation views keep observation and receipt times distinct.
+- Explicit person-to-conversation links clear stale message filters, and the message lab inherits the selected conversation's case. Unassigned/orphan reports have a human-review inbox rather than disappearing. Participant records show their own reports and addressed messages; only case-subject records display that case's officer welfare review. Assistance-needed status uses an amber treatment, with open assistance tasks shown separately.
+- Archive dropdowns retain focus and comparison position. Search has an accessible clear action; no duplicate native clear icon is shown.
+- Map Overview can be hidden on desktop. A selected-area breadcrumb allows return to Houston/parent areas; zoom buttons animate briefly and respect reduced motion. Search Enter opens the matching area, and / focuses neighborhood search.
+- All mobile detail types close Overview before appearing. Basemap choice survives scenario changes; an overlay opacity of zero really hides the overlays. Tile redraws retain selected-region/cell state and offscreen keyboard exclusions.
+- Hospitality values now aggregate a fixed 4×4 fixture set. Area-weighted scores and explicit known/unknown utility coverage remain coherent across zoom levels, and known capacity is conserved.
+
+Staged validation: syntax checks and all 81 automated tests pass. Browser regression checks cover stale-filter links, case context in the lab, raw unassigned reports, keyboard-focus preservation, mobile list/detail/back navigation, hidden Overview reopening, mobile unlocated cards, retained basemap choice, zero-opacity overlays, offscreen tab exclusions, and retained imagery comparison position. Tests use an isolated in-memory exercise; the owner's saved cases remain untouched.
+
+Lessons: review state belongs to the named case subjects, not every participant linked to the case. Cross-tab navigation must carry explicit case context. Map redraws must reconcile selection and keyboard state. A hierarchy must aggregate fixed data rather than generate unrelated values at each detail level.
