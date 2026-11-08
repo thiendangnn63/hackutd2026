@@ -1,4 +1,21 @@
+import {normalize,matches} from './records.js';
 // Offline planning fixtures. Coordinates below are synthesized, never geocoded reports.
+// Search preserves the supplied records; it never assigns geography or operational status.
+export function searchMapRecords(regions,places,query,{enabledTypes=['supplies','shelter','medical']}={}) {
+  const term=normalize(query);
+  if(!term)return {regions:[],places:[]};
+  const enabled=new Set(enabledTypes);
+  const ranked=(records,text)=>records.map((record,index)=>{
+    const name=normalize(record.name);
+    return {record,index,rank:name===term?0:name.startsWith(term)?1:matches(name,term)?2:3};
+  }).filter(({record})=>matches(text(record),term))
+    .sort((a,b)=>a.rank-b.rank||a.index-b.index).map(({record})=>record);
+  return {
+    regions:ranked(regions,region=>region.name),
+    places:ranked(places.filter(place=>enabled.has(place.type)),place=>
+      [place.name,place.resource,place.type,place.region?.name].join(' '))
+  };
+}
 export const NEED_TYPES = ['medical', 'evacuation', 'supplies', 'other'];
 export const geometryOf = value => value?.type === 'Feature' ? value.geometry : value;
 export function geometryBounds(value) {
@@ -162,6 +179,13 @@ export function fitMapCamera(bounds,width,height,insets={}) {
   const x=bounds.x+bounds.width/2-(edges.left-edges.right)/2*unit;
   const y=bounds.y+bounds.height/2-(edges.top-edges.bottom)/2*unit;
   return [x,y,zoom].every(Number.isFinite)?{x,y,zoom}:fallback();
+}
+// Geographic rasters have finite coverage; never repeat them beyond their real extent.
+export function boundCameraToExtent(camera,bounds,width,height) {
+  if(!bounds||!['x','y','width','height'].every(key=>Number.isFinite(bounds[key]))||bounds.width<=0||bounds.height<=0)return camera;
+  const view=cameraView(camera,width,height);
+  const center=(value,start,span,viewSpan)=>span<=viewSpan?start+span/2:Math.max(start+viewSpan/2,Math.min(start+span-viewSpan/2,value));
+  return {...camera,x:center(camera.x,bounds.x,bounds.width,view.width),y:center(camera.y,bounds.y,bounds.height,view.height)};
 }
 export function zoomAt(camera, factor, point={x:camera.x,y:camera.y},minZoom=.4) {
   const floor=minimumZoom(minZoom);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {geometryBounds,insideGeometry,hasIntersection,demoLocations,buildSubtiles,hospitalityFixture,hospitalityForRegion,NEED_TYPES,detailLevel,cameraView,zoomAt} from '../public/map-model.js';
+import {boundCameraToExtent,searchMapRecords,geometryBounds,insideGeometry,hasIntersection,demoLocations,buildSubtiles,hospitalityFixture,hospitalityForRegion,NEED_TYPES,detailLevel,cameraView,zoomAt} from '../public/map-model.js';
 import {HoustonService} from '../src/houston-service.js';
 const root=new URL('..',import.meta.url).pathname;
 const square={type:'Polygon',coordinates:[[[0,0],[4,0],[4,4],[0,4],[0,0]],[[1,1],[3,1],[3,3],[1,3],[1,1]]]};
@@ -95,4 +95,78 @@ test('hospitality hierarchy is deterministic, independent of request volume, and
     assert.notEqual(hospitalityForRegion(region,level)[0].hospitality.utilityCoverage.power.available,-1);
   }
   assert.deepEqual(region,before);
+});
+
+
+const mapRegions=[
+  {id:'willow',name:'Willowbrook',geometry:{type:'Polygon',coordinates:rect(0,0,4,4)},notes:'water hub'},
+  {id:'north',name:'North District',geometry:{type:'Polygon',coordinates:rect(4,0,8,4)}}
+];
+const mapPlaces=[
+  {id:'supplies-north',name:'Northside distribution hub',resource:'Water & essential supplies',type:'supplies',region:mapRegions[1],status:'unverified'},
+  {id:'shelter-west',name:'West community shelter',resource:'Temporary hospitality',type:'shelter',region:mapRegions[0],status:'unverified'},
+  {id:'medical-central',name:'Central medical point',resource:'Medical assessment & drinking water',type:'medical',region:mapRegions[0],status:'unverified'}
+];
+
+test('global map search returns no fallback rows for empty or unmatched queries',()=>{
+  for(const query of ['', '  \t  ', 'no-such-person-or-place'])assert.deepEqual(searchMapRecords(mapRegions,mapPlaces,query),{regions:[],places:[]});
+  assert.deepEqual(searchMapRecords(mapRegions,mapPlaces,'water').regions,[]); // Region notes are not a geographic name.
+});
+
+test('global map search ANDs name, resource, type and neighborhood terms independently of word order',()=>{
+  assert.deepEqual(searchMapRecords(mapRegions,mapPlaces,'north water supplies').places.map(p=>p.id),['supplies-north']);
+  assert.deepEqual(searchMapRecords(mapRegions,mapPlaces,'water NORTH').places.map(p=>p.id),['supplies-north']);
+  assert.deepEqual(searchMapRecords(mapRegions,mapPlaces,'willowbrook medical assessment').places.map(p=>p.id),['medical-central']);
+  assert.deepEqual(searchMapRecords(mapRegions,mapPlaces,'water shelter').places,[]);
+  assert.deepEqual(searchMapRecords(mapRegions,mapPlaces,'DISTRICT north').regions.map(r=>r.id),['north']);
+});
+
+test('global map search handles accents, whitespace and punctuation as literal text',()=>{
+  const regions=[{id:'unicode',name:'Clínica Ñorte'},{id:'literal',name:'Café (A+B) [North]'},{id:'regex-other',name:'AxB'}];
+  assert.equal(searchMapRecords(regions,[],'CLINICA   norte').regions[0].id,'unicode');
+  assert.deepEqual(searchMapRecords(regions,[],'a+b').regions.map(r=>r.id),['literal']);
+  assert.equal(searchMapRecords(regions,[],'[north]').regions[0].id,'literal');
+  assert.deepEqual(searchMapRecords(regions,[],'a.b').regions,[]);
+  assert.deepEqual(searchMapRecords([{id:'literal-html',name:'<script>Named region</script>'}],[],'<script>').regions.map(r=>r.id),['literal-html']);
+});
+
+test('global map search honors enabled facility types without hiding matching regions',()=>{
+  const result=searchMapRecords(mapRegions,mapPlaces,'willowbrook',{enabledTypes:['supplies']});
+  assert.equal(result.regions[0],mapRegions[0]);assert.deepEqual(result.places,[]);
+  assert.deepEqual(searchMapRecords(mapRegions,mapPlaces,'water',{enabledTypes:[]}).places,[]);
+  assert.deepEqual(searchMapRecords(mapRegions,mapPlaces,'water',{enabledTypes:['medical']}).places.map(p=>p.id),['medical-central']);
+});
+
+test('global map search ranks exact, prefix, name terms and context while preserving tie order',()=>{
+  const regionNames=['Greater North Center','North Center','North','North Annex','North'];
+  const regions=regionNames.map((name,i)=>({id:`r${i}`,name}));
+  assert.deepEqual(searchMapRecords(regions,[],'north').regions.map(r=>r.id),['r2','r4','r1','r3','r0']);
+  const places=[
+    {id:'context-first',name:'Supply depot',resource:'North district',type:'supplies'},
+    {id:'name-terms',name:'Greater North Center',type:'supplies'},
+    {id:'prefix-first',name:'North Center',type:'medical'},
+    {id:'exact',name:'North',type:'shelter'},
+    {id:'prefix-second',name:'North Annex',type:'supplies'},
+    {id:'context-second',name:'Medical tent',type:'medical',region:{name:'North District'}}
+  ];
+  assert.deepEqual(searchMapRecords([],places,'north').places.map(p=>p.id),['exact','prefix-first','prefix-second','name-terms','context-first','context-second']);
+});
+
+test('global map search leaves geometry, facility status, array order and caller state untouched',()=>{
+  const state={regions:structuredClone(mapRegions),places:structuredClone(mapPlaces),scenario:'normal'},before=structuredClone(state);
+  const freeze=value=>{if(value&&typeof value==='object'){Object.freeze(value);Object.values(value).forEach(freeze);}};freeze(state);
+  const result=searchMapRecords(state.regions,state.places,'water');
+  assert.deepEqual(state,before);assert.notEqual(result.regions,state.regions);assert.notEqual(result.places,state.places);
+  assert.equal(result.places[0],state.places[0]);assert.equal(result.places[1],state.places[2]);
+  assert.ok(result.places.every(p=>p.status==='unverified'));
+});
+
+
+test('raster coverage bounds limit pan to real imagery without repeating map geography',()=>{
+  const extent={x:-10000,y:-5000,width:20000,height:10000},camera={x:999999,y:-999999,zoom:.2};
+  const fitted=boundCameraToExtent(camera,extent,2560,720),view=cameraView(fitted,2560,720);
+  assert.equal(fitted.zoom,camera.zoom);assert.ok(view.x>=extent.x);assert.ok(view.y>=extent.y);
+  assert.ok(view.x+view.width<=extent.x+extent.width);assert.ok(view.y+view.height<=extent.y+extent.height);
+  assert.deepEqual(camera,{x:999999,y:-999999,zoom:.2});
+  assert.deepEqual(boundCameraToExtent({x:100,y:100,zoom:1},{x:0,y:0,width:100,height:100},800,630),{x:50,y:50,zoom:1});
 });

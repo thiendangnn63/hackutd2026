@@ -1,30 +1,30 @@
-# Map-first UI checkpoint · November 7, 2026
+# Beacon UI checkpoints · November 7–8, 2026
 
 The owner requested a clean, minimalist redesign with a freely movable map, zoom-dependent tiles/subtiles, red assistance demand, blue hospitality suitability, historical imagery overlays, points of interest, messages, and name-based information lookup.
 
-The implementation is a dependency-free, local workspace with a white header and navigation rail, compact floating controls, and a full-height map. On mobile the rail becomes bottom navigation, the overview panel can be opened on demand, and area details use a bottom card. Map labels, facility icons, and unknown-area hatching retain their screen size at high zoom.
+Beacon is a dependency-free local workspace with a dark glass header, navigation rail, restrained red/blue accents, compact floating controls, and a full-height map. Its signal/lighthouse mark is an original SVG with a matching favicon. On mobile the rail becomes bottom navigation, the overview panel can be opened on demand, and area details use a bottom card. Map labels, facility icons, and unknown-area hatching retain their screen size at high zoom.
 
 ## Current behavior
 
 - Free drag panning; wheel and two-finger pinch zoom; keyboard +/−, arrows, 0 and Escape; fit Houston. Pointer cancellation and pinch-to-drag transitions cannot accidentally open a tile.
-- Official Houston-only polygons and historical aerial mosaic retained. Neighborhoods switch to clipped 2×2 cells at 2.2× zoom and 4×4 at 5×. Cells without area are omitted, and offscreen cells are removed from the Tab order.
+- Official Houston-only request polygons sit over historical aerial and satellite context that also covers the surrounding geography. Neighborhoods switch to clipped 2×2 cells at 2.2× zoom and 4×4 at 5×. Cells without area are omitted, and offscreen cells are removed from the Tab order.
 - Red opacity scales linearly to the maximum visible-detail-level request count, with the maximum displayed in a legend. Filtering a need category changes the map counts and scale. No-report areas remain unknown; the coverage queue and unlocated requests remain accessible. Urgent medical cases in quiet neighborhoods remain individually visible in area details.
 - Blue opacity represents fictional hospitality planning scores derived from fictional power, water and access inputs. These inputs are independent of report volume and imagery. Unknown scores remain hatched. Detail cards show the inputs and unverified planning status.
 - Six fictional distribution/shelter/medical markers show resource, capacity and unverified status. Category checkboxes control visibility.
-- Map imagery controls switch between the bundled aerial mosaic and boundaries, with aerial and tile opacity sliders. The archive has a dropdown for the actual imported Harvey pairs and a draggable before/after comparison with an accessible slider. The existing trained-model panel remains available below it.
+- Map imagery controls switch between bundled geographic imagery and boundaries, with imagery and tile opacity sliders. The archive has a dropdown for the actual imported Harvey pairs and a draggable before/after comparison with an accessible slider. The existing trained-model panel remains available below it.
 - Messages groups raw incoming reports and simulated outgoing messages by case. People searches existing subjects/participants and related case descriptions, locations and message text. Person records keep last-known information, raw reports, times, welfare state, and officer review distinct. The existing intake, outreach, SMS lab, evidence review, independent assistance, reset and audit workflows remain in Casework.
 
 ## Data boundaries
 
 Houston's existing fixtures contain neighborhood totals, not actual report coordinates. Subtile coordinates are explicitly synthetic, sampled deterministically inside the official region polygons. Request totals and each overlapping category sum are conserved. Hospitality and facility data are fictional planning inputs. No government/provider connection or new operational assessment has been established.
 
-One Houston aerial mosaic is georeferenced; per-pixel capture dates are unavailable. The three imported Harvey satellite pairs support real visual comparison but do not have a verified placement on the Houston dashboard. The UI keeps those study areas separate instead of assigning fabricated geographic positions or dates. At deep map zoom the city overview mosaic naturally has limited resolution.
+The city and metro aerial mosaics and NASA regional/global composites have recorded geographic extents. NAIP per-pixel capture dates are unavailable; Blue Marble is historical 2004 context. The three imported Harvey satellite pairs support real visual comparison but do not have a verified placement on the Houston dashboard. The UI keeps those study areas separate instead of assigning fabricated geographic positions or dates. At deep map zoom the city overview mosaic naturally has limited resolution.
 
 No runtime dependencies, paid APIs, external map requests, or credentials were added. Loopback binding, same-origin mutations and the static-file allowlist remain enforced. No public push or deployment is part of this checkpoint.
 
 ## Verification
 
-`npm run check`, all 70 automated tests, and `git diff --check` pass. Automated checks cover the existing domain/HTTP/model boundaries plus actual-geometry containment, holes, count conservation, camera anchors, pinch/drag behavior and case-scoped search. Browser checks use an isolated in-memory server so the existing persisted exercise is not reset.
+The initial checkpoint passed `npm run check`, 70 automated tests, and `git diff --check`. Current validation appears in the latest iteration below. Automated checks cover the existing domain/HTTP/model boundaries plus actual-geometry containment, holes, count conservation, camera anchors, pinch/drag behavior and case-scoped search. Browser checks use an isolated in-memory server so the existing persisted exercise is not reset.
 
 Verified in a real browser: desktop map render and pan; neighborhood and subtile selection; keyboard zoom/pan/reset; mobile pinch, cancellation, overview and detail cards; red/blue layers; zero-report scenario; imported image loading and dropdown/overlay comparison; family intake → simulated outreach → raw SMS → person search → conversation, with welfare remaining unknown after an unverified sighting. The model inference implementation is unchanged.
 
@@ -88,3 +88,18 @@ Validation: syntax checks and all 87 automated tests pass. Browser checks confir
 The reset/cache check was performed only after the live 4174 process was verified to run createApp(new Store()) with a null persistence path. The owner's 4173 persisted exercise checksum was unchanged before/after; its cases were not reset. No public push, deployment, external provider call, or welfare/assistance contract change is part of this pass.
 
 Lessons: fit a map to its usable viewport rather than a fixed zoom floor. A short layout needs reachable scroll surfaces, not merely smaller typography. Updating data should preserve the user's reading position; history truncation needs an explicit route to older content.
+
+
+## Iteration 6 · Beacon, dark glass and complete geographic context
+
+The owner named the product **Beacon** and requested a minimal dark glass design with red and blue accents. The shared palette now uses dark neutral surfaces, thin borders and blurred translucent map controls. Red identifies reported need; blue identifies hospitality inputs and navigation. Text contrast, focus rings, keyboard behavior and the existing compact layouts remain explicit. Header copy was shortened, page titles and package metadata use Beacon, and the header/favicon use an original scalable signal/lighthouse mark at `public/beacon-logo.svg`. No remote font or UI dependency was added.
+
+Previously blank surroundings and municipal holes now show real geographic imagery: a global and Texas/Gulf NASA Blue Marble background, a wider transparent USGS/USDA NAIP metro image, and the existing city aerial detail. Each uses its actual recorded EPSG:4326 extent; only request tiles and selections are clipped to Houston. Official no-data pixels remain transparent rather than black or fabricated. Shared opacity/boundaries controls operate on the complete raster stack. Panning is bounded by the global image extent, without repeating geography. All rasters are historical; they have different dates/resolutions and do not establish current damage, access or shelter suitability. See `HOUSTON_DATA.md` and metadata for source URLs, dimensions, dates and checksums.
+
+Map search now searches all neighborhood names and enabled facilities using literal multiword terms. It exposes an actual result count, and Enter opens only an actual match. Unmatched searches cannot open the unrelated unlocated-review card. Choosing a queue tab clears the query and restores that queue. Existing request totals and category filters are unchanged.
+
+People and Messages safely highlight original text with DOM nodes, preserving accents, Unicode and literal HTML-like text. Message search has Previous/Next and Enter/Shift+Enter navigation. It prefers messages containing every term, labels partial matches as related, and distinguishes case/reference matches from message-content matches. New queries and explicit thread selections reveal the matching message; tall bubbles reveal their first highlighted text. State refresh and tab round trips retain reading position. Compact context/Back controls remain sticky because detail layouts allow overflow to reach their outer scroll surface.
+
+Validation: JavaScript syntax and **103 automated tests** pass; **8 Python geography checks** pass; all three new context rasters decode at their recorded dimensions and match SHA-256. A scoped non-SVG text contrast audit passed across Map, People, Messages, intake and Imagery; this is not a complete accessibility conformance claim. Browser checks cover actual no-match and multiword facility search, red/blue layers, zero-report scenario, imagery opacity zero and boundaries choice retained across scenario changes, full-city fit at 2560×720, 844×390, 390×844 and 320×640, reachable compact Back and matching text in a 574px-tall message, Prev/Next/Shift+Enter, literal markup remaining plain text, clear no-message state, and reading offsets retained across state refresh and Map round trips. Family intake/outreach/report checks used only the verified in-memory port-4174 exercise. The saved port-4173 exercise checksum remained unchanged.
+
+Lessons: a search hit should be visible where the user is reading, not merely make its conversation appear in a list. Sticky context cannot work through a non-scrolling overflow-hidden ancestor. Expanded map backgrounds need their own honest extents and provenance while the operational overlay keeps its original geographic scope. A dark glass interface still requires readable captions and restrained blur.

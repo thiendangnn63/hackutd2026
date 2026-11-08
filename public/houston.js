@@ -1,5 +1,5 @@
 import {node,button,svgNode,icon,iconButton,title,count} from './ui.js';
-import {geometryOf,geometryBounds,demoLocations,buildSubtiles,detailLevel,cameraView,zoomAt as boundedZoom,fitMapCamera,startGesture,moveGesture,hospitalityFixture,hospitalityForRegion,NEED_TYPES} from './map-model.js';
+import {geometryOf,geometryBounds,demoLocations,buildSubtiles,detailLevel,cameraView,zoomAt as boundedZoom,fitMapCamera,startGesture,moveGesture,hospitalityFixture,hospitalityForRegion,searchMapRecords,boundCameraToExtent,NEED_TYPES} from './map-model.js';
 const $=s=>document.querySelector(s);
 const root=$('#houston-content'),status=$('#houston-status'),frame=$('#map-view');
 let data,svg,project,paths=new Map(),cells=new Map(),pois=[],mapSize={width:1000,height:700};
@@ -34,7 +34,8 @@ function declutterLabels(unit){
   }
 }
 function setCamera(next){
-  camera=next;const v=cameraView(camera,mapSize.width,mapSize.height);
+  const coverage=data.contextBasemaps?.find(image=>image.available&&image.kind==='world');
+  camera=coverage?boundCameraToExtent(next,rectangle(coverage.bbox),mapSize.width,mapSize.height):next;const v=cameraView(camera,mapSize.width,mapSize.height);
   svg.setAttribute('viewBox',`${v.x} ${v.y} ${v.width} ${v.height}`);
   $('#map-zoom-in').disabled=camera.zoom>=24;$('#map-zoom-out').disabled=camera.zoom<=minimumCameraZoom()+1e-9;
   const nextLevel=detailLevel(camera.zoom);
@@ -105,12 +106,12 @@ function bindArea(el,region,cell=null){
 function renderTiles(){
   if(!paintLayer)return;const focused=document.activeElement?.closest('[data-region-id]')?.dataset;tooltip.hidden=true;paintLayer.replaceChildren();paths.clear();
   const all=data.regions.flatMap(r=>level?cells.get(`${r.id}:${level}`):[areaData(r)]),max=Math.max(0,...all.map(metric));
-  const fill=item=>layer==='hospitality'?(item.hospitality.score==null?'url(#unknown-hatch)':'#437cc8'):(metric(item)?'#d6544e':'url(#unknown-hatch)');
+  const fill=item=>layer==='hospitality'?(item.hospitality.score==null?'url(#unknown-hatch)':'#75abff'):(metric(item)?'#ff747b':'url(#unknown-hatch)');
   const opacity=item=>layer==='hospitality'?(item.hospitality.score==null ? .55*alpha() : item.hospitality.score/100*alpha()):(metric(item)?metric(item)/Math.max(1,max)*alpha():.55*alpha());
   for(const region of data.regions){
-    const outline=svgNode('path',{d:path(region.geometry),fill:level?'transparent':fill(areaData(region)),'fill-opacity':level?0:opacity(areaData(region)),'fill-rule':'evenodd',stroke:'#f7f8ef','stroke-width':level ? .6 : .9,'vector-effect':'non-scaling-stroke',class:'map-region'});
+    const outline=svgNode('path',{d:path(region.geometry),fill:level?'transparent':fill(areaData(region)),'fill-opacity':level?0:opacity(areaData(region)),'fill-rule':'evenodd',stroke:'#c7d7eb','stroke-opacity':.25,'stroke-width':level ? .6 : .9,'vector-effect':'non-scaling-stroke',class:'map-region'});
     if(!level){bindArea(outline,region);paintLayer.append(outline);}else{
-      const group=svgNode('g',{'clip-path':`url(#clip-${region.id})`});for(const cell of cells.get(`${region.id}:${level}`).filter(c=>c.hasArea)){const r=svgNode('rect',{...rectangle(cell.bounds),fill:fill(cell),'fill-opacity':opacity(cell),stroke:'#ffffff','stroke-width':.7,'vector-effect':'non-scaling-stroke',class:'map-subtile'});bindArea(r,region,cell);group.append(r);}outline.setAttribute('pointer-events','none');paintLayer.append(group,outline);
+      const group=svgNode('g',{'clip-path':`url(#clip-${region.id})`});for(const cell of cells.get(`${region.id}:${level}`).filter(c=>c.hasArea)){const r=svgNode('rect',{...rectangle(cell.bounds),fill:fill(cell),'fill-opacity':opacity(cell),stroke:'#c7d7eb','stroke-opacity':.22,'stroke-width':.7,'vector-effect':'non-scaling-stroke',class:'map-subtile'});bindArea(r,region,cell);group.append(r);}outline.setAttribute('pointer-events','none');paintLayer.append(group,outline);
     }paths.set(region.id,outline);
   }
   reconcileAreas();if(focused){const replacement=[...paintLayer.querySelectorAll('[data-region-id]')].find(e=>e.dataset.regionId===focused.regionId&&e.dataset.cellId===focused.cellId);(replacement||svg).focus({preventScroll:true});}
@@ -120,19 +121,39 @@ function renderMetrics(){
   const metrics=$('#map-metrics');metrics.replaceChildren();for(const [value,label,tone] of [[data.stats.openRequests,'Open requests',''],[data.stats.coverageChecks,'Coverage checks',''],[data.stats.urgentRequests,'Urgent cases','metric-alert']]){const e=node('div',tone);e.append(node('strong','',count(value)),node('small','',label));metrics.append(e);}$('#coverage-count').textContent=data.stats.coverageChecks;document.querySelector('.operations-heading p').textContent=`${data.regions.length} coverage areas · Houston city limits`;
 }
 function renderQueue(){
-  if(!data)return;const term=$('#map-search').value.trim().toLocaleLowerCase();$('#map-search-clear').hidden=!term;
-  const rows=queue==='places'?[]:data.regions.filter(r=>queue==='coverage'?!r.openCount:layer==='hospitality'?parentHospitality(r).score!=null:r.openCount>0&&metric(r)>0).filter(r=>!term||r.name.toLocaleLowerCase().includes(term));
-  if(term)for(const r of data.regions)if(r.name.toLocaleLowerCase().includes(term)&&!rows.includes(r))rows.push(r);
-  rows.sort((a,b)=>layer==='hospitality'?(parentHospitality(b).score||0)-(parentHospitality(a).score||0):NEED_TYPES.indexOf(a.priority)-NEED_TYPES.indexOf(b.priority)||b.openCount-a.openCount);
-  const list=$('#map-area-list');list.replaceChildren();for(const r of rows){
-    const b=button('',()=>selectArea(r),'area-row'),mark=node('span',`area-icon ${!r.openCount?'unknown':layer==='hospitality'?'blue':''}`);mark.append(icon(layer==='hospitality'?'shelter':r.priority==='medical'?'medical':r.priority==='evacuation'?'pin':'supplies'));
-    const copy=node('span','area-copy');copy.append(node('strong','',r.name),node('small','',layer==='hospitality'?'Demo suitability · needs inspection':r.openCount?`${title(r.priority)} · human review`:'No reports · coverage unknown'));b.append(mark,copy,node('span','area-count',layer==='hospitality'?`${parentHospitality(r).score??'—'}%`:count(metric(r))),icon('chevron'));list.append(b);
+  if(!data)return;
+  const term=$('#map-search').value.trim(),searching=Boolean(term);
+  $('#map-search-clear').hidden=!searching;
+  const enabled=[...document.querySelectorAll('input[name=poi]:checked')].map(e=>e.value);
+  const found=searching?searchMapRecords(data.regions,pois,term,{enabledTypes:enabled}):null;
+  const rows=searching?found.regions:queue==='places'?[]:data.regions.filter(r=>
+    queue==='coverage'?!r.openCount:layer==='hospitality'?parentHospitality(r).score!=null:r.openCount>0&&metric(r)>0);
+  if(!searching)rows.sort((a,b)=>layer==='hospitality'?(parentHospitality(b).score||0)-(parentHospitality(a).score||0):
+    NEED_TYPES.indexOf(a.priority)-NEED_TYPES.indexOf(b.priority)||b.openCount-a.openCount);
+  const places=searching?found.places:queue==='places'?pois.filter(p=>enabled.includes(p.type)):[];
+  const list=$('#map-area-list');list.replaceChildren();
+  let resultStatus=$('#map-search-results');
+  if(!resultStatus){resultStatus=node('div','map-search-results');resultStatus.id='map-search-results';resultStatus.setAttribute('role','status');resultStatus.setAttribute('aria-live','polite');list.before(resultStatus);}
+  resultStatus.hidden=!searching;
+  resultStatus.textContent=`${count(rows.length+places.length)} ${rows.length+places.length===1?'result':'results'} across Houston`;
+  list.setAttribute('aria-label',searching?'Map search results':queue==='priority'?'Priority areas':queue==='coverage'?'Coverage checks':'Places');
+  for(const r of rows){
+    const b=button('',()=>selectArea(r),'area-row'),mark=node('span',`area-icon ${!r.openCount?'unknown':layer==='hospitality'?'blue':''}`);
+    if(searching)b.dataset.searchResult='true';
+    mark.append(icon(layer==='hospitality'?'shelter':r.priority==='medical'?'medical':r.priority==='evacuation'?'pin':'supplies'));
+    const copy=node('span','area-copy');
+    copy.append(node('strong','',r.name),node('small','',layer==='hospitality'?'Demo suitability · needs inspection':r.openCount?`${title(r.priority)} · human review`:'No reports · coverage unknown'));
+    b.append(mark,copy,node('span','area-count',layer==='hospitality'?`${parentHospitality(r).score??'—'}%`:count(metric(r))),icon('chevron'));list.append(b);
   }
-  const enabled=[...document.querySelectorAll('input[name=poi]:checked')].map(e=>e.value);const places=pois.filter(p=>enabled.includes(p.type)&&(queue==='places'||term)&&(!term||[p.name,p.resource,p.region.name,p.type].join(' ').toLocaleLowerCase().includes(term)));
   if(places.length&&rows.length)list.append(node('div','places-divider','Facilities · fictional'));
-  for(const poi of places){const b=button('',()=>{focusBounds(geometryBounds(poi.region.geometry),3);showPoi(poi);},'area-row place-row');const mark=node('span','area-icon '+(poi.type==='medical'?'':'blue'));mark.append(icon(poi.type));const copy=node('span','area-copy');copy.append(node('strong','',poi.name),node('small','',`${poi.region.name} · planning only`));b.append(mark,copy,icon('chevron'));list.append(b);}
-  if(!rows.length&&!places.length)list.append(node('p','record-empty',term?'No matching areas or facilities. Try a shorter search.':queue==='places'?'No facilities match the enabled categories.':'No areas in this list. Coverage checks remain available.'));
-  if(queue==='priority'&&layer==='assistance'&&data.unlocatedRequests.length){const b=button('',showUnlocated,'area-row'),copy=node('span','area-copy');copy.append(node('strong','','Location needs review'),node('small','','Retained outside map totals'));b.append(copy,node('span','area-count',count(data.unlocatedRequests.length)),icon('chevron'));list.append(b);}
+  for(const poi of places){
+    const b=button('',()=>{focusBounds(geometryBounds(poi.region.geometry),3);showPoi(poi);},'area-row place-row');
+    if(searching)b.dataset.searchResult='true';
+    const mark=node('span','area-icon '+(poi.type==='medical'?'':'blue'));mark.append(icon(poi.type));
+    const copy=node('span','area-copy');copy.append(node('strong','',poi.name),node('small','',`${poi.region.name} · planning only`));b.append(mark,copy,icon('chevron'));list.append(b);
+  }
+  if(!rows.length&&!places.length)list.append(node('p','record-empty',searching?'No matching areas or facilities. Try another name or resource.':queue==='places'?'No facilities match the enabled categories.':'No areas in this list. Coverage checks remain available.'));
+  if(!searching&&queue==='priority'&&layer==='assistance'&&data.unlocatedRequests.length){const b=button('',showUnlocated,'area-row'),copy=node('span','area-copy');copy.append(node('strong','','Location needs review'),node('small','','Retained outside map totals'));b.append(copy,node('span','area-count',count(data.unlocatedRequests.length)),icon('chevron'));list.append(b);}
 }
 function showUnlocated(){closeDetail();revealDetail();const h=node('div','detail-heading');h.append(node('h2','','Location needs review'),iconButton('close','Close location review',closeDetail));detail.replaceChildren(h,node('p','detail-source','These requests remain open. They cannot be placed on the map until a location is established.'));for(const r of data.unlocatedRequests)detail.append(node('p','record-empty',`${r.id}: ${r.summary}`));detail.focus({preventScroll:true});}
 function showPoi(poi){
@@ -143,7 +164,7 @@ function renderPois(){
   poiLayer.replaceChildren();const enabled=[...document.querySelectorAll('input[name=poi]:checked')].map(e=>e.value);
   for(const poi of pois.filter(p=>enabled.includes(p.type))){
     const [x,y]=project(poi.point),g=svgNode('g',{class:'map-poi',tabindex:0,role:'button','aria-label':`${poi.name}, fictional ${poi.type}, not operational`});g.dataset.x=x;g.dataset.y=y;g.dataset.poiId=poi.id;g.classList.toggle('is-selected',activePoiId===poi.id);
-    g.append(svgNode('circle',{r:16,fill:'#fff',stroke:'#d3ded1','stroke-width':1.4}),svgNode('circle',{r:12.5,fill:poi.type==='medical'?'#f7eeeb':poi.type==='shelter'?'#edf2fb':'#eef3ed'}));const symbol=icon(poi.type);for(const [k,v]of Object.entries({x:-7,y:-7,width:14,height:14}))symbol.setAttribute(k,v);symbol.style.color=poi.type==='medical'?'#c77869':poi.type==='shelter'?'#6a8eb9':'#6f896b';g.append(symbol);
+    g.append(svgNode('circle',{r:16,fill:'#151b27',stroke:'#5e718a','stroke-width':1.4}),svgNode('circle',{r:12.5,fill:poi.type==='medical'?'#34212b':'#192c45'}));const symbol=icon(poi.type);for(const [k,v]of Object.entries({x:-7,y:-7,width:14,height:14}))symbol.setAttribute(k,v);symbol.style.color=poi.type==='medical'?'#ff747b':'#75abff';g.append(symbol);
     g.addEventListener('pointerenter',e=>{if(gesture?.moved)return;showTooltip({name:poi.name,openCount:0,categories:{},hospitality:{score:null}},e);tooltip.replaceChildren(node('strong','',poi.name),node('span','',`${title(poi.type)} · fictional planning facility`));});g.addEventListener('pointerleave',()=>{tooltip.hidden=true;});g.addEventListener('focus',e=>{showTooltip({name:poi.name,openCount:0,categories:{},hospitality:{score:null}},e);tooltip.replaceChildren(node('strong','',poi.name),node('span','',`${title(poi.type)} · fictional planning facility`));});g.addEventListener('blur',()=>{tooltip.hidden=true;});
     g.addEventListener('click',e=>{if(!e.detail)showPoi(poi);});g.addEventListener('keydown',e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();showPoi(poi);}});poiLayer.append(g);
   }setCamera(camera);
@@ -154,15 +175,35 @@ function initializeMap(){
   project=([lon,lat])=>[(800-width)/2+(lon-west)*cos*scale,(630-height)/2+(north-lat)*scale];
   svg=svgNode('svg',{class:'map-canvas',role:'group',tabindex:0,'aria-label':'Houston interactive response map. Drag to pan; scroll or pinch to zoom. Plus and minus zoom; arrows pan; zero fits Houston. Enter opens a focused area.'});
   const defs=svgNode('defs'),clip=svgNode('clipPath',{id:'city-clip'});clip.append(svgNode('path',{d:path(data.city.boundary),'clip-rule':'evenodd','fill-rule':'evenodd'}));defs.append(clip);
-  const pattern=svgNode('pattern',{id:'unknown-hatch',width:7,height:7,patternUnits:'userSpaceOnUse'});pattern.append(svgNode('path',{d:'M-1 1L1-1M0 7L7 0M6 8L8 6',stroke:'#6c805e','stroke-width':.45,opacity:.5}));defs.append(pattern);
+  const pattern=svgNode('pattern',{id:'unknown-hatch',width:7,height:7,patternUnits:'userSpaceOnUse'});pattern.append(svgNode('path',{d:'M-1 1L1-1M0 7L7 0M6 8L8 6',stroke:'#adbacb','stroke-width':.45,opacity:.5}));defs.append(pattern);
   for(const r of data.regions){const regionClip=svgNode('clipPath',{id:`clip-${r.id}`});regionClip.append(svgNode('path',{d:path(r.geometry),'clip-rule':'evenodd','fill-rule':'evenodd'}));defs.append(regionClip);cells.set(`${r.id}:0`,hospitalityForRegion(r,0));const placed=demoLocations(r);for(const l of [1,2])cells.set(`${r.id}:${l}`,buildSubtiles(r,l,placed));}svg.append(defs);
-  const land=svgNode('g',{'clip-path':'url(#city-clip)'});land.append(svgNode('path',{d:path(data.city.boundary),class:'map-land','fill-rule':'evenodd'}));const basemap=data.basemap||{};
-  if(basemap.available&&typeof basemap.url==='string'&&/^\/(?!\/)/.test(basemap.url)&&Array.isArray(basemap.bbox)){imagery=svgNode('image',{...rectangle(basemap.bbox),href:basemap.url,preserveAspectRatio:'none',opacity:Number($('#aerial-opacity').value)/100,class:'map-aerial'});imagery.addEventListener('error',()=>{imagery.remove();imagery=null;$('#imagery-provenance').textContent='Aerial image unavailable. Geographic boundaries remain visible.';});imagery.style.display=$('#basemap-select').value==='aerial'?'':'none';land.append(imagery);}else{imagery=null;$('#basemap-select').value='boundaries';$('#imagery-provenance').textContent=basemap.reason||'Aerial imagery unavailable. Geographic boundaries remain visible.';}
-  paintLayer=svgNode('g',{'clip-path':'url(#city-clip)'});poiLayer=svgNode('g',{'aria-label':'Fictional facilities'});svg.append(land,paintLayer,svgNode('path',{d:path(data.city.boundary),fill:'none',stroke:'#859b7c','stroke-width':1,'vector-effect':'non-scaling-stroke','fill-rule':'evenodd','pointer-events':'none'}));
-  const labels=svgNode('g',{'aria-hidden':'true'});for(const [i,r]of data.regions.entries())if(r.labelPoint&&(i<3||i%9===0)){const [x,y]=project(r.labelPoint),t=svgNode('text',{x,y,class:'map-place-name','font-size':5,'text-anchor':'middle'});t.dataset.size='9';t.dataset.rank=String(i<3?i+1:100+i);t.textContent=r.name.toUpperCase();labels.append(t);}const [hx,hy]=project([-95.3698,29.7604]),cityLabel=svgNode('text',{x:hx,y:hy,class:'map-place-name','font-size':10,'font-weight':600,'text-anchor':'middle'});cityLabel.dataset.size='15';cityLabel.dataset.rank='0';cityLabel.textContent='HOUSTON';labels.append(cityLabel);svg.append(labels,poiLayer);root.append(svg);
+  // Context imagery is not clipped to Houston; only the request/selection overlays are.
+  const land=svgNode('g',{'aria-hidden':'true','pointer-events':'none'});
+  land.append(svgNode('path',{d:path(data.city.boundary),class:'map-land','fill-rule':'evenodd'}));
+  const basemap=data.basemap||{};
+  const images=[...(data.contextBasemaps||[]),{...basemap,kind:'detail',title:'Houston aerial detail'}].filter(image=>
+    image.available&&typeof image.url==='string'&&/^\/(?!\/)/.test(image.url)&&Array.isArray(image.bbox)&&image.bbox.length===4&&image.bbox.every(Number.isFinite));
+  imagery=svgNode('g',{class:'map-imagery',opacity:Number($('#aerial-opacity').value)/100});
+  for(const source of images){
+    const image=svgNode('image',{...rectangle(source.bbox),href:source.url,preserveAspectRatio:'none',
+      class:source.kind==='detail'||source.kind==='metro'?'map-aerial':'map-context'});
+    image.dataset.imageryId=source.id||'houston-aerial';
+    image.addEventListener('error',()=>{image.remove();$('#imagery-provenance').textContent='One historical image is unavailable. Remaining layers and Houston boundaries stay visible.';});
+    imagery.append(image);
+  }
+  if(images.length){
+    imagery.style.display=$('#basemap-select').value==='aerial'?'':'none';
+    $('#imagery-provenance').textContent='NASA Blue Marble 2004 context + USGS / USDA historical aerial imagery. Capture dates vary. No live disaster imagery.';
+    land.append(imagery);
+  }else{
+    imagery=null;$('#basemap-select').value='boundaries';
+    $('#imagery-provenance').textContent='Historical imagery unavailable. Showing verified Houston boundaries only.';
+  }
+  paintLayer=svgNode('g',{'clip-path':'url(#city-clip)'});poiLayer=svgNode('g',{'aria-label':'Fictional facilities'});svg.append(land,paintLayer,svgNode('path',{d:path(data.city.boundary),fill:'none',stroke:'#b1c5de','stroke-opacity':.45,'stroke-width':1,'vector-effect':'non-scaling-stroke','fill-rule':'evenodd','pointer-events':'none'}));
+  const labels=svgNode('g',{'aria-hidden':'true'});for(const [i,r]of data.regions.entries())if(r.labelPoint&&(i<3||i%9===0)){const [x,y]=project(r.labelPoint),t=svgNode('text',{x,y,class:'map-place-name',fill:'#dbe6f6',stroke:'#0d1119','font-size':5,'text-anchor':'middle'});t.dataset.size='9';t.dataset.rank=String(i<3?i+1:100+i);t.textContent=r.name.toUpperCase();labels.append(t);}const [hx,hy]=project([-95.3698,29.7604]),cityLabel=svgNode('text',{x:hx,y:hy,class:'map-place-name',fill:'#e7edf5',stroke:'#0d1119','font-size':10,'font-weight':600,'text-anchor':'middle'});cityLabel.dataset.size='15';cityLabel.dataset.rank='0';cityLabel.textContent='HOUSTON';labels.append(cityLabel);svg.append(labels,poiLayer);root.append(svg);
   const fixtures=[['supplies','Northside distribution hub','Water & essential supplies','240 kits',5],['shelter','West community shelter','Temporary hospitality','120 people',18],['medical','Central medical point','Medical assessment','24 stations',60],['supplies','East supply center','Food & essential supplies','180 kits',57],['shelter','South community hub','Temporary hospitality','90 people',42],['medical','North medical point','Medical assessment','12 stations',1]];
   pois=fixtures.flatMap(([type,name,resource,capacity,index],i)=>{const region=data.regions[index];return region?.labelPoint?[{id:`facility-${i}`,type,name,resource,capacity,region,point:region.labelPoint}]:[];});
-  pointers.clear();gesture=null;bindGestures();observer=new ResizeObserver(entries=>{const r=entries[0].contentRect;if(r.width&&r.height){const changed=Math.abs(r.width-mapSize.width)>1||Math.abs(r.height-mapSize.height)>1;mapSize={width:r.width,height:r.height};if(changed&&detail.hidden)fitHouston();else setCamera(camera);}});observer.observe(frame);renderMetrics();renderPois();renderQueue();fitHouston();$('#map-source').textContent=`Houston city boundaries · ${basemap.attribution||'USGS / USDA NAIP'} · historical`;
+  pointers.clear();gesture=null;bindGestures();observer=new ResizeObserver(entries=>{const r=entries[0].contentRect;if(r.width&&r.height){const changed=Math.abs(r.width-mapSize.width)>1||Math.abs(r.height-mapSize.height)>1;mapSize={width:r.width,height:r.height};if(changed&&detail.hidden)fitHouston();else setCamera(camera);}});observer.observe(frame);renderMetrics();renderPois();renderQueue();fitHouston();$('#map-source').textContent=`NASA Blue Marble · USGS / USDA NAIP · historical imagery · Houston-only request tiles`;
 }
 function bindGestures(){
   let suppressClick=false;const begin=()=>{gesture=startGesture(camera,[...pointers.values()],screenPoint,800/mapSize.width/camera.zoom,minimumCameraZoom());};
@@ -183,13 +224,13 @@ async function load(){
 }
 for(const mode of ['assistance','hospitality'])$('#layer-'+mode).addEventListener('click',()=>{layer=mode;for(const m of ['assistance','hospitality'])$('#layer-'+m).setAttribute('aria-pressed',String(m===mode));$('#need-filter').hidden=mode==='hospitality';$('#layer-description').textContent=mode==='hospitality'?'Bluer tiles show higher demo suitability. Utility and access inputs need inspection.':'Redder tiles have more open requests. Zoom in to see smaller areas.';if(svg){renderTiles();renderQueue();if(selected)selectArea(selected.region,selected.cell,false);}});
 $('#need-filter').addEventListener('change',e=>{filter=e.target.value;if(svg){renderTiles();renderQueue();if(selected)selectArea(selected.region,selected.cell,false);}});
-for(const type of ['priority','coverage','places'])$('#queue-'+type).addEventListener('click',()=>{queue=type;for(const q of ['priority','coverage','places']){$('#queue-'+q).setAttribute('aria-selected',String(q===type));$('#queue-'+q).tabIndex=q===type?0:-1;}$('#map-area-list').setAttribute('aria-label',type==='priority'?'Priority areas':type==='coverage'?'Coverage checks':'Places');renderQueue();});
+for(const type of ['priority','coverage','places'])$('#queue-'+type).addEventListener('click',()=>{$('#map-search').value='';queue=type;for(const q of ['priority','coverage','places']){$('#queue-'+q).setAttribute('aria-selected',String(q===type));$('#queue-'+q).tabIndex=q===type?0:-1;}$('#map-area-list').setAttribute('aria-label',type==='priority'?'Priority areas':type==='coverage'?'Coverage checks':'Places');renderQueue();});
 $('#map-search').addEventListener('input',renderQueue);$('#houston-scenario').addEventListener('change',load);$('#map-zoom-in').addEventListener('click',()=>{if(svg)animateCamera(zoomAt(camera,1.6));});$('#map-zoom-out').addEventListener('click',()=>{if(svg)animateCamera(zoomAt(camera,1/1.6));});$('#map-fit').addEventListener('click',()=>fitHouston(true));$('#city-fit').addEventListener('click',()=>{location.hash='mayor';fitHouston(true);});
 for(const input of document.querySelectorAll('input[name=poi]'))input.addEventListener('change',()=>{if(svg){renderPois();renderQueue();}});
 $('#imagery-toggle').addEventListener('click',()=>{const panel=$('#imagery-panel');panel.hidden=!panel.hidden;$('#imagery-toggle').setAttribute('aria-expanded',String(!panel.hidden));});document.addEventListener('keydown',e=>{if(e.key!=='Escape'||frame.hidden)return;const imageryWasOpen=!$('#imagery-panel').hidden,overviewWasOpen=frame.classList.contains('panel-open'),focus=document.activeElement;$('#imagery-panel').hidden=true;$('#imagery-toggle').setAttribute('aria-expanded','false');frame.classList.remove('panel-open');$('#mobile-panel-toggle').setAttribute('aria-expanded','false');if(imageryWasOpen&&$('#imagery-panel').contains(focus))$('#imagery-toggle').focus({preventScroll:true});else if(overviewWasOpen&&$('#operations-panel').contains(focus))$('#mobile-panel-toggle').focus({preventScroll:true});else if(detail.contains(focus)){e.preventDefault();closeDetail();svg?.focus({preventScroll:true});}});
 $('#basemap-select').addEventListener('change',e=>{if(imagery)imagery.style.display=e.target.value==='aerial'?'':'none';});$('#aerial-opacity').addEventListener('input',e=>{if(imagery)imagery.setAttribute('opacity',Number(e.target.value)/100);});$('#tile-opacity').addEventListener('input',()=>{if(svg)renderTiles();});$('#mobile-panel-toggle').addEventListener('click',()=>{if(mobile()){const open=frame.classList.toggle('panel-open');$('#mobile-panel-toggle').setAttribute('aria-expanded',String(open));}else{frame.classList.remove('overview-collapsed');$('#mobile-panel-toggle').setAttribute('aria-expanded','true');setCamera(camera);$('#map-search').focus({preventScroll:true});}});
 $('#desktop-panel-close').addEventListener('click',()=>{frame.classList.add('overview-collapsed');$('#mobile-panel-toggle').setAttribute('aria-expanded','false');$('#mobile-panel-toggle').focus();});
-$('#map-search').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#map-area-list .area-row')?.click();}if(e.key==='Escape'&&e.target.value){e.preventDefault();e.target.value='';renderQueue();}});
+$('#map-search').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(e.target.value.trim())$('#map-area-list [data-search-result="true"]')?.click();}if(e.key==='Escape'&&e.target.value){e.preventDefault();e.target.value='';renderQueue();}});
 document.addEventListener('keydown',e=>{if(e.key==='/'&&!frame.hidden&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)){e.preventDefault();frame.classList.remove('overview-collapsed');if(mobile()){frame.classList.add('panel-open');$('#mobile-panel-toggle').setAttribute('aria-expanded','true');}$('#map-search').focus();}});
 load();
 

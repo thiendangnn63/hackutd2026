@@ -61,3 +61,32 @@ test('Houston API rejects foreign cities and origins and does not mutate family 
   assert.equal((await fetch(base + '/api/houston', { headers: { origin: 'https://unrelated.invalid' } })).status, 403);
   assert.deepEqual(store.read(), before);
 });
+
+test('historical context imagery exposes only existing allowlisted EPSG4326 rasters and does not broaden request geometry',t=>{
+  const f=fixture(t);
+  const context={id:'earth',file:'earth-context.jpg',available:true,crs:'EPSG:4326',bbox:[-180,-90,180,90],kind:'world',date:'Historical August 2004 composite'};
+  const base={bbox:[-95.8,29.6,-95.2,30],contextBasemaps:[context]};
+  f.put('houston-geography-meta.json',base);
+  let result=f.service.view();assert.equal(result.available,true);assert.equal(result.contextBasemaps[0].available,false);assert.equal(result.contextBasemaps[0].url,null);
+  writeFileSync(join(f.directory,context.file),'fixture bytes; no image decoding in service');
+  result=f.service.view();assert.equal(result.contextBasemaps[0].available,true);assert.equal(result.contextBasemaps[0].url,'/data/earth-context.jpg');
+  assert.deepEqual(result.city.bbox,base.bbox);assert.equal(result.regions.length,4);assert.equal(result.maxOpenCount,300);
+  const invalid=[{...context,file:'../../.env'},{...context,crs:'EPSG:3857'},{...context,bbox:[-200,-90,180,90]},{...context,bbox:[0,0,0,1]},{...context,bbox:[-180,-90,NaN,90]}];
+  for(const image of invalid){f.put('houston-geography-meta.json',{...base,contextBasemaps:[image]});const next=f.service.view();assert.equal(next.available,true);assert.equal(next.contextBasemaps[0].available,false);assert.equal(next.contextBasemaps[0].url,null);}
+});
+
+test('context metadata absence remains compatible with boundary-only fixtures',t=>{
+  const f=fixture(t),result=f.service.view();assert.deepEqual(result.contextBasemaps,[]);assert.equal(result.basemap.available,false);
+});
+
+test('bundled geographic context assets have exact local image routes without arbitrary file access',async t=>{
+  const f=fixture(t),store=new Store(),app=createApp(store,undefined,f.service);
+  await new Promise(resolve=>app.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(resolve=>app.close(resolve)));
+  const base=`http://127.0.0.1:${app.address().port}`;
+  for(const filename of ['earth-context.jpg','houston-context.jpg','houston-metro.png']){
+    const response=await fetch(`${base}/data/${filename}`);assert.equal(response.status,200);
+    assert.equal(response.headers.get('content-type'),filename.endsWith('.png')?'image/png':'image/jpeg');
+    const bytes=new Uint8Array(await response.arrayBuffer());assert.deepEqual([...bytes.slice(0,2)],filename.endsWith('.png')?[137,80]:[255,216]);
+  }
+  assert.equal((await fetch(`${base}/data/context-arbitrary.jpg`)).status,404);
+});

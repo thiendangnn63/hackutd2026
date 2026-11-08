@@ -17,9 +17,13 @@ const files = {
   '/ui.js': ['ui.js', 'text/javascript'],
   '/records.js': ['records.js', 'text/javascript'],
   '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
+  '/beacon-logo.svg': ['beacon-logo.svg', 'image/svg+xml'],
   '/workspace.js': ['workspace.js', 'text/javascript'],
   '/workspace.css': ['workspace.css', 'text/css'],
   '/data/houston-imagery.jpg': ['data/houston-imagery.jpg', 'image/jpeg'],
+  '/data/earth-context.jpg': ['data/earth-context.jpg', 'image/jpeg'],
+  '/data/houston-context.jpg': ['data/houston-context.jpg', 'image/jpeg'],
+  '/data/houston-metro.png': ['data/houston-metro.png', 'image/png'],
 };
 async function body(req) {
   if (!String(req.headers['content-type'] || '').startsWith('application/json')) throw new InputError('Use application/json.', 415);
@@ -89,5 +93,5 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const port = Number(process.env.PORT || 4173);
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('PORT must be an integer from 1024 to 65535.');
   const app = createApp();
-  app.listen(port, '127.0.0.1', () => console.log(`Family Response demo: http://127.0.0.1:${port}\nFictional data only. SMS, model extraction and emergency alert are simulated. No credentials used.`));
+  app.listen(port, '127.0.0.1', () => console.log(`Beacon demo: http://127.0.0.1:${port}\nFictional data only. SMS, model extraction and emergency alert are simulated. No credentials used.`));
 }

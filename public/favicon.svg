@@ -1,1 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#3c6553"/><path d="M13 7h6v6h6v6h-6v6h-6v-6H7v-6h6Z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-labelledby="title">
+  <title id="title">Beacon</title><rect width="64" height="64" rx="14" fill="#0d1119"/>
+  <path d="M20 10C7 16 7 34 20 40" stroke="#ff747b" stroke-width="4" stroke-linecap="round"/>
+  <path d="M44 10C57 16 57 34 44 40" stroke="#75abff" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="32" cy="24" r="4" fill="#e7edf5"/>
+  <path d="M30 34H34L38 54H26L30 34Z" fill="#e7edf5" stroke="#e7edf5" stroke-width="2" stroke-linejoin="round"/>
+</svg>

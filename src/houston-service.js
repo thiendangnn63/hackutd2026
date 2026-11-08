@@ -4,6 +4,18 @@ import { InputError } from './domain.js';
 import { buildHoustonSummary, createHoustonFixtures } from './houston.js';
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
+const CONTEXT_FILES = new Set(['earth-context.jpg','houston-context.jpg','houston-metro.png']);
+function contextBasemaps(metadata,directory) {
+  return (Array.isArray(metadata.contextBasemaps)?metadata.contextBasemaps:[]).map(image=>{
+    const bbox=image?.bbox;
+    const valid=image&&CONTEXT_FILES.has(image.file)&&image.crs==='EPSG:4326'&&
+      Array.isArray(bbox)&&bbox.length===4&&bbox.every(Number.isFinite)&&
+      bbox[0]>=-180&&bbox[2]<=180&&bbox[1]>=-90&&bbox[3]<=90&&bbox[0]<bbox[2]&&bbox[1]<bbox[3];
+    const available=Boolean(valid&&image.available===true&&existsSync(resolve(directory,image.file)));
+    return {...image,available,url:available?`/data/${image.file}`:null,
+      reason:available?null:'This historical context image is unavailable; other geographic layers remain visible.'};
+  });
+}
 export class HoustonService {
   constructor(root) { this.root = root; }
   view({ scenario = 'normal', city = 'houston' } = {}) {
@@ -24,9 +36,10 @@ export class HoustonService {
         available: true, mode: 'simulation', scenario,
         city: { id: 'houston', name: 'Houston', boundary, bbox: metadata.bbox },
         geography: { sourceUrls: metadata.sourceUrls || [], attribution: metadata.attribution || '', regionDescription: metadata.regionDescription || 'Official subdivisions clipped to Houston city limits.' },
+        contextBasemaps: contextBasemaps(metadata,data),
         basemap: { ...image, available: hasImage, url: hasImage ? '/data/houston-imagery.jpg' : null, reason: hasImage ? null : (image.reason || 'Aerial imagery is unavailable. Boundaries and simulated counts remain visible.') },
         ...summary,
-        limitations: ['Fictional open requests, separate from the Oak District family exercise. No live SMS data.', 'Red intensity reflects request volume, not severity, population risk or personal safety.', 'Review order medical, evacuation, supplies is a demo preference, not clinical triage or automatic dispatch.', 'No-report areas remain unknown and need coverage checks.'],
+        limitations: ['Fictional open requests, separate from the Oak District family exercise. No live SMS data.', 'Red intensity reflects request volume, not severity, population risk or personal safety.', 'Review order medical, evacuation, supplies is a demo preference, not clinical triage or automatic dispatch.', 'No-report areas remain unknown and need coverage checks.', 'Historical background context may include surrounding cities; request tiles and selections remain Houston-only.'],
       };
     } catch {
       return { available: false, mode: 'simulation', reason: 'Verified Houston geography is not available. No approximate city shapes or report counts have been substituted.' };

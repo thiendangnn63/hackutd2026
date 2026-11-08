@@ -102,3 +102,92 @@ export function messageThreads(state, query = '', scope = 'all') {
   return threads.filter(c => scope !== 'follow_up' || c.reviewState !== 'resolved')
     .filter(c => matches(caseSearchText(state, c), query));
 }
+
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+const queryTokens = query => [...new Set(normalize(query).split(' ').filter(Boolean))];
+
+// Keep a source range for each normalized UTF-16 unit, expanding visible marks to
+// complete graphemes so an accent or emoji sequence is never split by a segment.
+function normalizedOffsets(source) {
+  let decomposed = '';
+  const origins = [];
+  for (const { segment, index } of graphemes.segment(source)) {
+    const part = segment.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+    decomposed += part;
+    for (let i = 0; i < part.length; i++) origins.push({ start: index, end: index + segment.length });
+  }
+  // Lowercase the complete string to preserve contextual forms such as Greek sigma.
+  const lowered = decomposed.toLocaleLowerCase(), lowerOrigins = [];
+  let offset = 0;
+  for (const character of decomposed) {
+    for (let i = 0; i < character.toLocaleLowerCase().length; i++) lowerOrigins.push(origins[offset]);
+    offset += character.length;
+  }
+  // This is only needed for a locale whose contextual casing changes output length.
+  if (lowerOrigins.length !== lowered.length) {
+    lowerOrigins.length = 0;
+    offset = 0;
+    for (const character of decomposed) {
+      const end = offset + character.length;
+      const length = decomposed.slice(0, end).toLocaleLowerCase().length;
+      while (lowerOrigins.length < length) lowerOrigins.push(origins[offset]);
+      offset = end;
+    }
+  }
+  let normalized = '', whitespace = null;
+  const ranges = [];
+  for (let i = 0; i < lowered.length;) {
+    const character = String.fromCodePoint(lowered.codePointAt(i)), range = lowerOrigins[i];
+    if (/\s/u.test(character)) {
+      whitespace = { start: whitespace?.start ?? range.start, end: range.end };
+    } else {
+      if (normalized && whitespace) { normalized += ' '; ranges.push(whitespace); }
+      whitespace = null;
+      normalized += character;
+      for (let j = 0; j < character.length; j++) ranges.push(range);
+    }
+    i += character.length;
+  }
+  return { normalized, ranges };
+}
+
+export function searchSegments(value, query) {
+  const source = String(value ?? ''), tokens = queryTokens(query);
+  if (!source || !tokens.length) return [{ text: source, matched: false }];
+  const { normalized, ranges } = normalizedOffsets(source), hits = [];
+  for (const token of tokens) {
+    for (let start = normalized.indexOf(token); start !== -1; start = normalized.indexOf(token, start + 1)) {
+      hits.push({ start: ranges[start].start, end: ranges[start + token.length - 1].end });
+    }
+  }
+  if (!hits.length) return [{ text: source, matched: false }];
+  hits.sort((a, b) => a.start - b.start || a.end - b.end);
+  const merged = [];
+  for (const hit of hits) {
+    const previous = merged.at(-1);
+    if (previous && hit.start <= previous.end) previous.end = Math.max(previous.end, hit.end);
+    else merged.push({ ...hit });
+  }
+  const segments = [];
+  let cursor = 0;
+  for (const hit of merged) {
+    if (hit.start > cursor) segments.push({ text: source.slice(cursor, hit.start), matched: false });
+    segments.push({ text: source.slice(hit.start, hit.end), matched: true });
+    cursor = hit.end;
+  }
+  if (cursor < source.length) segments.push({ text: source.slice(cursor), matched: false });
+  return segments;
+}
+
+export function messageHitIds(events, query) {
+  const tokens = queryTokens(query), fullIds = [], relatedIds = [];
+  if (!tokens.length) return { fullIds, relatedIds };
+  for (const event of events) {
+    // IDs and other metadata may filter a thread, but must not imply a visible text hit.
+    const visible = normalize([event.name, event.kind, event.text].join(' '));
+    const hits = tokens.map(token => visible.includes(token));
+    if (hits.every(Boolean)) fullIds.push(event.id);
+    if (hits.some(Boolean)) relatedIds.push(event.id);
+  }
+  return { fullIds, relatedIds };
+}

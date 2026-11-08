@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createSeed,openCase,sendOutreach,receiveReport} from '../src/domain.js';
-import {peopleIndex,matches,caseEvents,caseSearchText,searchPeople,messageThreads,outgoingForParticipant} from '../public/records.js';
+import {peopleIndex,matches,caseEvents,caseSearchText,searchPeople,messageThreads,outgoingForParticipant,searchSegments,messageHitIds} from '../public/records.js';
 function story(){const state=createSeed();const {caseId}=openCase(state,{subjectNames:'Rosa and Miguel Santos',description:'Grandparents with a blue coat.',reporterId:'mom',lastKnownTile:'A1',lastContactAt:'2026-11-07T12:00:00Z',searchTiles:['A1'],consentToOutreach:true});sendOutreach(state,caseId);receiveReport(state,{providerEventId:'search-test',senderId:'neighbor-1',caseId,text:'I saw Rosa and Miguel at Oak School. They need water for two people and the road is blocked.',observedAt:'2026-11-07T14:20:00Z'});return {state,caseId};}
 test('person lookup connects the existing case, raw sightings and exact message text without changing state',()=>{
   const {state,caseId}=story(),before=structuredClone(state),index=peopleIndex(state),rosa=index.find(p=>p.id===`subject:${caseId}`);
@@ -126,4 +126,69 @@ test('participant outgoing history includes known, orphan and unassigned message
   assert.ok(events.some(e=>e.caseId===caseId));assert.ok(events.some(e=>e.caseId==='C999'));assert.ok(events.some(e=>e.caseId===null));
   assert.ok(!events.some(e=>e.id==='M-other-person'));
   assert.deepEqual(outgoingForParticipant(state,'missing-participant'),[]);assert.deepEqual(outgoingForParticipant(state,null),[]);
+});
+
+
+test('search segments highlight literal case/accent-insensitive tokens and retain every original character',()=>{
+  const source='  José brought WATER, water & blankets.  ';
+  const segments=searchSegments(source,'jose WATER');
+  assert.equal(segments.map(s=>s.text).join(''),source);
+  assert.deepEqual(segments.filter(s=>s.matched).map(s=>s.text),['José','WATER','water']);
+  assert.ok(segments.every(s=>typeof s.text==='string'&&typeof s.matched==='boolean'));
+  assert.deepEqual(searchSegments(source,''),[{text:source,matched:false}]);
+  assert.deepEqual(searchSegments(source,'missing'),[{text:source,matched:false}]);
+});
+
+test('highlight offsets preserve combining accents, compatibility characters, emoji and contextual lowercase',()=>{
+  const source='Jose\u0301 👩🏽‍🚒, CAFÉ 🇺🇸 and oﬃce.';
+  const segments=searchSegments(source,'jose 👩 cafe ffi');
+  assert.equal(segments.map(s=>s.text).join(''),source);
+  assert.deepEqual(segments.filter(s=>s.matched).map(s=>s.text),['Jose\u0301','👩🏽‍🚒','CAFÉ','ﬃ']);
+  const family='A 👩‍👩‍👧‍👦 B';
+  assert.deepEqual(searchSegments(family,'👧'),[{text:'A ',matched:false},{text:'👩‍👩‍👧‍👦',matched:true},{text:' B',matched:false}]);
+  assert.deepEqual(searchSegments('ΣΟΣ','σ'),[{text:'Σ',matched:true},{text:'ΟΣ',matched:false}]);
+  const whitespace='\tCafé\u00a0\r\nWATER\t';
+  assert.equal(searchSegments(whitespace,'cafe water').map(s=>s.text).join(''),whitespace);
+});
+
+test('overlapping or adjacent token hits merge without duplicating original text',()=>{
+  assert.deepEqual(searchSegments('banana','ana nan'),[{text:'b',matched:false},{text:'anana',matched:true}]);
+  assert.deepEqual(searchSegments('ab','a b a'),[{text:'ab',matched:true}]);
+  assert.deepEqual(searchSegments('oﬃce','f fi'),[{text:'o',matched:false},{text:'ﬃ',matched:true},{text:'ce',matched:false}]);
+});
+
+test('HTML and regular-expression-shaped queries remain literal plain text',()=>{
+  const source='<script>alert(1)</script> [a-z] .* (a+)+$';
+  for(const query of ['<script>','[a-z]','.*','(a+)+$']){
+    const segments=searchSegments(source,query);
+    assert.equal(segments.map(s=>s.text).join(''),source);
+    assert.deepEqual(segments.filter(s=>s.matched).map(s=>s.text),[query]);
+  }
+  assert.deepEqual(searchSegments('ordinary text','.*'),[{text:'ordinary text',matched:false}]);
+  assert.deepEqual(searchSegments('aaa','(a+)+$'),[{text:'aaa',matched:false}]);
+});
+
+test('message hits combine visible sender, kind and message tokens while preserving event order',()=>{
+  const events=[
+    {id:'E-later-id',name:'Jordán Lee',kind:'Reported observation',text:'Water at Oak School.'},
+    {id:'E-earlier-id',name:'Maya Santos',kind:'Inquiry',text:'Jordan, have you seen Rosa?'},
+    {id:'E-third',name:'Sam Patel',kind:'Acknowledgment',text:'The water report was received.'},
+  ];
+  assert.deepEqual(messageHitIds(events,'jordan water'),{fullIds:['E-later-id'],relatedIds:['E-later-id','E-earlier-id','E-third']});
+  assert.deepEqual(messageHitIds(events,'lee observation oak'),{fullIds:['E-later-id'],relatedIds:['E-later-id']});
+  assert.deepEqual(messageHitIds(events,'water'),{fullIds:['E-later-id','E-third'],relatedIds:['E-later-id','E-third']});
+  assert.deepEqual(messageHitIds(events,''),{fullIds:[],relatedIds:[]});
+  assert.deepEqual(messageHitIds(events,'  \u0301  '),{fullIds:[],relatedIds:[]});
+});
+
+test('visible message hits exclude hidden IDs and never infer or mutate case/welfare associations',()=>{
+  const {state,caseId}=story(),before=structuredClone(state),events=caseEvents(state,caseId);
+  const hidden={id:'ONLY_HIDDEN_EVENT',caseId:'C999',name:'Neighbor',kind:'Reported observation',text:'Please review this report.',report:{senderId:'HIDDEN_SENDER'}};
+  assert.deepEqual(messageHitIds([hidden],'C999'),{fullIds:[],relatedIds:[]});
+  assert.deepEqual(messageHitIds([hidden],'ONLY_HIDDEN_EVENT'),{fullIds:[],relatedIds:[]});
+  assert.deepEqual(messageHitIds([hidden],'HIDDEN_SENDER'),{fullIds:[],relatedIds:[]});
+  const hits=messageHitIds(events,'Rosa water');assert.ok(hits.fullIds.length>0);
+  for(const event of events)searchSegments(event.text,'Rosa water');
+  assert.deepEqual(state,before);
+  assert.equal(state.cases.find(c=>c.id===caseId).welfareState,'unknown');
 });
