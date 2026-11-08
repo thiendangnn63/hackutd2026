@@ -29,6 +29,13 @@ export function caseEvents(state, caseId) {
   return eventsFor(state, event => event.caseId === caseId);
 }
 
+// Recipient identity is independent of whether a case has been assigned.
+export function outgoingForParticipant(state, participantId) {
+  if (!participantId) return [];
+  return eventsFor(state, event => event.recipientId === participantId)
+    .filter(event => event.direction === 'outgoing');
+}
+
 function eventSearchText(events) {
   return events.flatMap(e => [e.id, e.caseId, e.name, e.text, e.kind]).join(' ');
 }

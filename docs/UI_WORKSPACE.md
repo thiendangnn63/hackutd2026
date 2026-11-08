@@ -58,3 +58,18 @@ Casework now separates review, new inquiry, the message lab, and assistance into
 Browser verification covers facility search and category filtering, desktop/mobile facility cards, each Casework section, and a complete new C106 fictional grandparents flow: intake → automatic case review → scoped outreach → message lab for C106 → received report → automatic evidence review. Location remains an unverified sighting and welfare remains unknown. No new domain state, provider integration, dispatch, or external map request is introduced.
 
 Lesson: a map marker needs an equivalent searchable list entry; a case workflow should navigate through focused tasks while preserving case context.
+
+
+## Iteration 4 · readable text, touch targets and keyboard continuity
+
+A browser contrast audit found multiple faint labels and captions in the initial white workspace. Supporting foreground colors were strengthened without changing the restrained hue palette; the sampled non-SVG text across Map, People, Messages, intake and imagery passed the large/small-text contrast thresholds after the change. This is a scoped browser check, not a claim of complete accessibility conformance. Focus rings are more distinct. Mobile resource labels and zoom controls have larger touch areas, text-entry fields use 16px type, and 320px map controls use a second row instead of overlapping.
+
+Map detail cards close with Escape and return focus to the map. Opening and closing Overview/Imagery returns focus to a visible control. Offscreen POIs leave the Tab sequence; selecting an area clears the previous facility highlight. Map-list tabs now use a single Tab stop with arrow-key switching. Place labels declutter against one another and facility markers at low zoom, while retaining the city label in narrow full-city views.
+
+Record filters and mobile Back controls retain useful focus. Changed name queries select the strongest direct match, while ordinary state refreshes preserve selection. Loading records show an explicit status and aria-busy. A stale initial record response cannot overwrite a newer state event. Participant histories include only their own addressed outgoing messages across known, null and orphan case references, including an unassigned CHECKIN acknowledgment. Search result counts are announced through a static polite live region. Status messages can be dismissed.
+
+Successful intake and report navigation now follows an explicit local family-action-complete event rather than inferring completion from previous record counts. This fixes the case where the original app has loaded but the record-view snapshot is still pending. The API, domain states and external integration boundaries are unchanged.
+
+Verification: syntax checks and 83 automated tests pass, including two new recipient-history regressions. Browser checks cover direct-name selection after a contextual match, filter/Back focus, post-submit heading focus, loading feedback, delayed-record-response protection with a real saved fictional case in the isolated in-memory server, unassigned CHECKIN history, Escape/focus return, offscreen POIs, selection clearing, narrow-screen control separation, and mobile input type size.
+
+Lessons: a quiet interface still needs readable captions and dependable touch targets. Navigation should follow confirmed action outcomes, not inferred differences between asynchronously loaded snapshots. A message belongs in its actual recipient’s history even when case assignment is unresolved.

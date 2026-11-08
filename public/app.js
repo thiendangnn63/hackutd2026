@@ -11,7 +11,7 @@ const formatTime = value => { if (!value) return 'Time unavailable'; const date 
 const tag = (text, tone = 'muted') => el('span', 'tag ' + tone, text);
 const empty = text => el('p', 'empty', text);
 const person = id => state.participants.find(p => p.id === id)?.name || id || 'Unknown';
-function notify(text, error = false) { const node = $('#notice'); node.textContent = text; node.className = 'notice' + (error ? ' error' : ''); node.hidden = false; node.scrollIntoView({block:'nearest', behavior:'smooth'}); }
+function notify(text, error = false) { const node = $('#notice'); const message=el('span','notice-message',text);const dismiss=el('button','notice-dismiss','×');dismiss.type='button';dismiss.setAttribute('aria-label','Dismiss status message');dismiss.addEventListener('click',()=>{node.hidden=true;const heading=$('#casework-view h1');heading.tabIndex=-1;heading.focus({preventScroll:true});});node.replaceChildren(message,dismiss);node.className = 'notice' + (error ? ' error' : ''); node.hidden = false; node.scrollIntoView({block:'nearest', behavior:'smooth'}); }
 async function request(path, payload) {
   const response = await fetch(path, payload === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
   let body; try { body = await response.json(); } catch { throw new Error('The server returned an unreadable response. Please try again.'); }
@@ -25,7 +25,7 @@ async function mutate(path, payload, success, onResult) {
   if (busy) return;
   busy = true; const buttons = $$('button'); buttons.forEach(b => { b.dataset.wasDisabled = b.disabled ? 'true' : 'false'; b.disabled = true; });
   document.body.setAttribute('aria-busy','true'); notify('Processing local simulation…');
-  try { const result = await request(path,payload); if (onResult) onResult(result); render(); notify(result.duplicate ? 'Duplicate event recognized. No additional reports or messages were created.' : (typeof success === 'function' ? success(result) : success)); }
+  try { const result = await request(path,payload); if (onResult) onResult(result); render(); notify(result.duplicate ? 'Duplicate event recognized. No additional reports or messages were created.' : (typeof success === 'function' ? success(result) : success)); document.dispatchEvent(new CustomEvent('family-action-complete',{detail:{path,duplicate:Boolean(result.duplicate)}})); }
   catch (error) { notify(error.message, true); }
   finally { busy = false; document.body.removeAttribute('aria-busy'); buttons.forEach(b => { if (b.isConnected) { b.disabled = b.dataset.wasDisabled === 'true'; delete b.dataset.wasDisabled; } }); }
 }

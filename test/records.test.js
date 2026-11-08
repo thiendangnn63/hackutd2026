@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createSeed,openCase,sendOutreach,receiveReport} from '../src/domain.js';
-import {peopleIndex,matches,caseEvents,caseSearchText,searchPeople,messageThreads} from '../public/records.js';
+import {peopleIndex,matches,caseEvents,caseSearchText,searchPeople,messageThreads,outgoingForParticipant} from '../public/records.js';
 function story(){const state=createSeed();const {caseId}=openCase(state,{subjectNames:'Rosa and Miguel Santos',description:'Grandparents with a blue coat.',reporterId:'mom',lastKnownTile:'A1',lastContactAt:'2026-11-07T12:00:00Z',searchTiles:['A1'],consentToOutreach:true});sendOutreach(state,caseId);receiveReport(state,{providerEventId:'search-test',senderId:'neighbor-1',caseId,text:'I saw Rosa and Miguel at Oak School. They need water for two people and the road is blocked.',observedAt:'2026-11-07T14:20:00Z'});return {state,caseId};}
 test('person lookup connects the existing case, raw sightings and exact message text without changing state',()=>{
   const {state,caseId}=story(),before=structuredClone(state),index=peopleIndex(state),rosa=index.find(p=>p.id===`subject:${caseId}`);
@@ -102,4 +102,28 @@ test('conversations order received reports by receipt time rather than earlier o
   assert.equal(events.at(-1).at,'2026-11-07T10:00:00Z');
   assert.equal(events.at(-1).receivedAt,'2026-11-07T14:30:00Z');
   assert.deepEqual(messageThreads(state).find(t=>t.id===caseId).events,events);
+});
+
+
+test('participant outgoing history retains unassigned CHECKIN acknowledgments without inventing a case link',()=>{
+  const state=createSeed();
+  receiveReport(state,{providerEventId:'unassigned-checkin',senderId:'neighbor-2',text:'CHECKIN',observedAt:'2026-11-07T14:20:00Z'});
+  const before=structuredClone(state),sam=peopleIndex(state).find(p=>p.participantId==='neighbor-2');
+  assert.deepEqual(sam.caseIds,[]);
+  const events=outgoingForParticipant(state,'neighbor-2');
+  assert.equal(events.length,1);assert.equal(events[0].caseId,null);assert.equal(events[0].recipientId,'neighbor-2');
+  assert.equal(events[0].kind,'acknowledgment');assert.ok(events[0].text.includes('CHECKIN alone does not confirm safety'));
+  assert.deepEqual(state,before);
+});
+
+test('participant outgoing history includes known, orphan and unassigned messages only for their actual recipient',()=>{
+  const {state,caseId}=story();
+  state.outbox.push({id:'M-orphan-recipient',caseId:'C999',recipientId:'neighbor-1',kind:'acknowledgment',text:'Clarify the orphan case.',createdAt:'2026-11-07T14:26:00Z',status:'simulated'});
+  state.outbox.push({id:'M-null-recipient',caseId:null,recipientId:'neighbor-1',kind:'acknowledgment',text:'Clarify this report.',createdAt:'2026-11-07T14:25:00Z',status:'simulated'});
+  state.outbox.push({id:'M-other-person',caseId:null,recipientId:'neighbor-2',kind:'acknowledgment',text:'A separate participant.',createdAt:'2026-11-07T14:24:00Z',status:'simulated'});
+  const events=outgoingForParticipant(state,'neighbor-1');
+  assert.ok(events.every(e=>e.direction==='outgoing'&&e.recipientId==='neighbor-1'));
+  assert.ok(events.some(e=>e.caseId===caseId));assert.ok(events.some(e=>e.caseId==='C999'));assert.ok(events.some(e=>e.caseId===null));
+  assert.ok(!events.some(e=>e.id==='M-other-person'));
+  assert.deepEqual(outgoingForParticipant(state,'missing-participant'),[]);assert.deepEqual(outgoingForParticipant(state,null),[]);
 });

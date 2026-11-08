@@ -52,3 +52,5 @@ Messages and People derive their indexes only from existing case/participant/rep
 The presentation index preserves messages whose case reference is null or no longer exists in an explicit unassigned review thread. Participant records show their own authored reports and addressed messages; a linked family's welfare verification is not applied to the participant. Explicit conversation links carry case context into the message lab.
 
 Hospitality parent scores now aggregate the fixed finest-level fixtures using clipped land area. Known capacity sums across children; unknown inputs stay unknown, mixed utility states expose percentages, and partial coverage is labeled. These remain fictional planning values.
+
+Client state refreshes are guarded by a local revision counter so an older GET cannot supersede a newer mutation response. Successful client actions emit family-action-complete after state rendering; Casework uses that explicit action outcome for navigation, without changing HTTP payloads or domain states. Participant outgoing-history selection uses recipient IDs directly, including unresolved case references.
