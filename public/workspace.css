@@ -594,3 +594,15 @@ input[type=checkbox],input[type=range]{accent-color:var(--blue)}
 .overview-metrics strong{font-size:23px}
 .layer-section{padding:10px 18px 0}
 .layer-description{margin:6px 0;font-size:10px}
+
+/* Keep historical inquiry context distinct from incoming evidence. */
+.latest-report{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:18px 0;margin:20px 0}
+.latest-report h3,.original-inquiry h3{font-size:12px;font-weight:600;letter-spacing:0;margin:0 0 10px}
+.latest-report-source{font-size:10px;color:var(--muted);margin:0 0 8px}
+.latest-report-text{font-size:12px;line-height:1.8;margin:0 0 8px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.latest-report .workspace-note{margin:8px 0;line-height:1.7}
+.latest-report .pill{white-space:normal;line-height:1.6}
+.original-inquiry{margin:20px 0}
+.original-inquiry .record-description{margin:0 0 6px}
+.report-message-link{min-height:36px;font-size:11px;margin-top:4px}
+@media(max-width:760px),(max-height:520px){.report-message-link{min-height:44px}}

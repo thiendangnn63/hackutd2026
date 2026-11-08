@@ -3,19 +3,20 @@ const intersects=(a,b)=>a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1];
 let historyRequest;
 function history(force=false){
   if(force)historyRequest=null;
-  if(!historyRequest)historyRequest=fetch('/api/houston/history').then(response=>{if(!response.ok)throw new Error('Historical imagery unavailable.');return response.json();}).catch(error=>{historyRequest=null;throw error;});
+  if(!historyRequest){const request=fetch('/api/houston/history').then(response=>{if(!response.ok)throw new Error('Historical imagery unavailable.');return response.json();}).catch(error=>{if(historyRequest===request)historyRequest=null;throw error;});historyRequest=request;}
   return historyRequest;
 }
 export function createHistoricalLayer({project,unproject,onReady=()=>{},onStatus=()=>{}}){
   const element=svgNode('g',{class:'map-event-imagery','aria-hidden':'true','pointer-events':'none'}),unknown=svgNode('g',{class:'map-event-unknown'}),images=svgNode('g');element.append(unknown,images);element.style.display='none';
-  let data=null,mode='aerial',selectedDate=null,view=null,size=null,disposed=false,sceneKey='',outsideCapture=false,failed=new Set();
+  let data=null,mode='aerial',selectedDate=null,view=null,size=null,disposed=false,sceneKey='',outsideCapture=false,loadId=0,failed=new Set();
   const nodes=new Map(),backdrop=svgNode('rect',{fill:'#182330','fill-opacity':.62});
   const rectangle=bbox=>{const a=project([bbox[0],bbox[3]]),b=project([bbox[2],bbox[1]]);return {x:a[0],y:a[1],width:b[0]-a[0],height:b[1]-a[1]};};
   const scenes=()=>mode==='radar'?(data?.radar?.available?[data.radar]:[]):mode==='flood'?(data?.flood.imagery||[]):['water','event-rgb'].includes(mode)?(data?.water.scenes||[]).filter(scene=>mode==='water'?scene.waterUrl:scene.rgbUrl):[];
   const selected=()=>scenes().find(scene=>scene.date===selectedDate)||scenes().find(scene=>scene.date==='2017-08-30')||scenes().find(scene=>scene.date>='2017-08-29')||scenes()[0];
+  function clearScene(){for(const item of nodes.values())item.image.remove();nodes.clear();unknown.replaceChildren();sceneKey='';outsideCapture=false;}
   function report(){
     if(!['water','event-rgb','flood','radar'].includes(mode))return;
-    const scene=selected();if(!scene)return onStatus({mode,source:'history-metadata',kind:'unavailable',label:'Historical imagery unavailable'});
+    const scene=selected();if(!scene)return onStatus({mode,kind:'unavailable',reason:'no-capture',label:'No dated capture · reference context',date:null,scene:null,outsideCapture:false});
     const empty=!outsideCapture&&nodes.size===0;
     const waiting=[...nodes.values()].some(item=>!item.loaded&&!item.error),error=[...nodes.values()].some(item=>item.error);
     const native=Math.min(Infinity,...[...nodes.values()].filter(item=>item.loaded&&Number.isFinite(item.source.sourceMetersPerPixel)).map(item=>item.source.sourceMetersPerPixel));
@@ -24,21 +25,23 @@ export function createHistoricalLayer({project,unproject,onReady=()=>{},onStatus
   }
   const controller={element,
     async load(force=false){
+      const id=++loadId;
+      if(force)failed.clear();
       onStatus({mode,source:'history-metadata',kind:'loading'});
-      try{const next=await history(force);if(disposed)return;data=next;onReady(controller);controller.update(view,size);}
-      catch{if(!disposed)onStatus({mode,source:'history-metadata',kind:'unavailable',label:'Historical imagery unavailable'});}
+      try{const next=await history(force);if(disposed||id!==loadId)return;data=next;onReady(controller);controller.update(view,size);}
+      catch{if(!disposed&&id===loadId)onStatus({mode,source:'history-metadata',kind:'unavailable',label:'Historical imagery unavailable'});}
     },
     get available(){return {water:Boolean(data?.water.scenes.some(scene=>scene.waterUrl)),rgb:Boolean(data?.water.scenes.some(scene=>scene.rgbUrl)),flood:Boolean(data?.flood.available),radar:Boolean(data?.radar?.available)};},
     dates(nextMode=mode){return (nextMode==='radar'?(data?.radar?.available?[data.radar]:[]):nextMode==='flood'?data?.flood.imagery:(data?.water.scenes||[]).filter(scene=>nextMode==='event-rgb'?scene.rgbUrl:scene.waterUrl))?.map(scene=>({value:scene.date,label:scene.date+(scene.date<'2017-08-25'?' · before Harvey':' · Harvey response')}))||[];},
     setMode(nextMode,date=selectedDate){mode=nextMode;selectedDate=date;sceneKey='';controller.update(view,size);return selected()?.date;},
     setDate(value){selectedDate=value;sceneKey='';controller.update(view,size);},
     hotspots(){return (data?.flood.imagery||[]).flatMap(scene=>scene.detail.map(asset=>({...asset,date:scene.date})));},
-    retry(){if(!data)return controller.load(true);failed.clear();sceneKey='';controller.update(view,size);},
+    retry(){failed.clear();if(!data||!selected())return controller.load(true);sceneKey='';controller.update(view,size);},
     update(nextView,nextSize){
       view=nextView;size=nextSize;if(disposed||!view||!size)return;
       const enabled=['water','event-rgb','flood','radar'].includes(mode);element.style.display=enabled?'':'none';
-      if(!enabled){for(const item of nodes.values())item.image.remove();nodes.clear();unknown.replaceChildren();sceneKey='';return;}
-      const scene=selected();if(!scene){report();return;}
+      if(!enabled){clearScene();return;}
+      const scene=selected();if(!scene){clearScene();element.style.display='none';report();return;}
       selectedDate=scene.date;
       const bbox=mode==='flood'?(scene.overview?.bbox||data.flood.bbox):scene.bbox;
       const key=mode+'|'+scene.id+'|'+scene.date;

@@ -80,21 +80,25 @@ function historicalStatus(state){
     return;
   }
   if(state.mode!==imageryMode)return;
+  if(state.date&&captureDates[state.mode]!==state.date){captureDates[state.mode]=state.date;refreshCaptureDates();}
   imageryStatus=state;if(svg)updateMapResolution();
   const scene=state.scene;
   if(scene){
     const percentage=Number.isFinite(scene.validFraction)?`${Math.round(scene.validFraction*100)}% of the mapped Houston extent has clear observations. `:'';
     $('#historical-note').textContent=state.mode==='water'?`${percentage}Green B03 + SWIR B11, analyzed at 20 m. Cyan emphasizes open water, including rivers and lakes; it does not isolate newly flooded ground. Floodwater mixed with buildings or vegetation can be missed. Dimmed context marks clouds, shadows or missing observations. Use Show flooding for dated street imagery.`:state.mode==='event-rgb'?`${percentage}Same-date Sentinel-2 true color. Dimmed context marks unavailable observations; reference imagery underneath supplies orientation.`:state.mode==='radar'?'NASA/JPL probable inundation from Sentinel-1 radar, August 5–29, 2017. Blue marks proxy indications; unmarked areas are unknown. Reliability is lower in urban areas.':'NOAA flood-date aerial imagery. Dimmed context marks missing flight coverage; reference imagery underneath is context, not evidence of dry ground.';
     $('#map-source').textContent=state.outsideCapture?'Outside the selected capture · reference imagery is context':state.mode==='flood'?`NOAA NGS · ${scene.date} · partial flight coverage · Harvey 2017`:state.mode==='radar'?'NASA/JPL ARIA · Sentinel-1 radar · August 29, 2017 · 30 m flood proxy':`Copernicus Sentinel-2 · ${scene.date} · ${state.mode==='water'?'B03 / B11 water emphasis':'true color'} · 20 m`;
+  }else if(state.reason==='no-capture'){
+    $('#historical-note').textContent='No dated capture is available for this mode. Reference imagery provides context; flood status remains unknown.';
+    $('#map-source').textContent='Reference imagery only · no dated capture · flood status unknown';
   }
-  $('#imagery-detail-status').textContent=state.kind==='loading'?'Loading dated imagery…':state.kind==='unavailable'?'This historical image could not load. Use Retry or choose another capture.':state.label;
+  $('#imagery-detail-status').textContent=state.reason==='no-capture'?'No dated capture is available. Retry to refresh the available captures.':state.kind==='loading'?'Loading dated imagery…':state.kind==='unavailable'?'This historical image could not load. Use Retry or choose another capture.':state.label;
   $('#imagery-detail-retry').hidden=state.kind!=='unavailable';
 }
 function refreshCaptureDates(){
   const control=$('#capture-date');control.replaceChildren();
   for(const option of historicalLayer?.dates(imageryMode)||[]){const item=node('option','',option.label);item.value=option.value;control.append(item);}
-  if([...control.options].some(option=>option.value===captureDates[imageryMode]))control.value=captureDates[imageryMode];
-  else if(control.options.length){control.value=control.options[control.options.length-1].value;captureDates[imageryMode]=control.value;}
+  control.value=[...control.options].some(option=>option.value===captureDates[imageryMode])?captureDates[imageryMode]:'';
+  control.disabled=!control.options.length;
   $('#capture-date-label').hidden=!isHistorical(imageryMode);$('#historical-note').hidden=!isHistorical(imageryMode);
 }
 function focusHistoricalExample(index=0){
@@ -116,7 +120,9 @@ function applyImageryMode(mode){
   imageryMode=mode;$('#basemap-select').value=mode;
   if(imagery)imagery.style.display=mode==='boundaries'?'none':'';
   setImageryOpacity($('#aerial-opacity').value);
-  detailImagery?.setEnabled(mode!=='boundaries');historicalLayer?.setMode(mode,captureDates[mode]);historicalLayer?.element.setAttribute('opacity',Number($('#aerial-opacity').value)/100);
+  detailImagery?.setEnabled(mode!=='boundaries');const resolvedDate=historicalLayer?.setMode(mode,captureDates[mode]);
+  if(isHistorical(mode)&&resolvedDate)captureDates[mode]=resolvedDate;
+  historicalLayer?.element.setAttribute('opacity',Number($('#aerial-opacity').value)/100);
   $('#imagery-provenance').textContent=mode==='water'||mode==='event-rgb'?'Contains modified Copernicus Sentinel data (2017). Same-date scenes; clouds and shadows are masked.':mode==='flood'?'NOAA NGS aerial photographs acquired during the Harvey response, August–September 2017.':mode==='radar'?'NASA/JPL ARIA flood proxy from Copernicus Sentinel-1 observations, August 2017.':mode==='boundaries'?'Official Houston boundaries. No imagery is shown.':'USGS / USDA 2017–2021 aerial detail with NASA 2004 regional context. Reference imagery does not establish flood conditions.';
   frame.classList.toggle('water-view',mode==='water');frame.classList.toggle('event-view',isHistorical(mode));
   refreshCaptureDates();$('#water-map-key').hidden=!['water','radar'].includes(mode);$('#historical-example').hidden=!isHistorical(mode);$('#capture-unknown-key').hidden=!isHistorical(mode);

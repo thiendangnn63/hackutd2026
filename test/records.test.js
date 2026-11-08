@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createSeed,openCase,sendOutreach,receiveReport} from '../src/domain.js';
-import {peopleIndex,matches,caseEvents,caseSearchText,searchPeople,messageThreads,outgoingForParticipant,searchSegments,messageHitIds} from '../public/records.js';
+import {peopleIndex,matches,caseEvents,caseSearchText,searchPeople,messageThreads,outgoingForParticipant,searchSegments,messageHitIds,latestReceivedReport,incomingReportKind} from '../public/records.js';
 function story(){const state=createSeed();const {caseId}=openCase(state,{subjectNames:'Rosa and Miguel Santos',description:'Grandparents with a blue coat.',reporterId:'mom',lastKnownTile:'A1',lastContactAt:'2026-11-07T12:00:00Z',searchTiles:['A1'],consentToOutreach:true});sendOutreach(state,caseId);receiveReport(state,{providerEventId:'search-test',senderId:'neighbor-1',caseId,text:'I saw Rosa and Miguel at Oak School. They need water for two people and the road is blocked.',observedAt:'2026-11-07T14:20:00Z'});return {state,caseId};}
 test('person lookup connects the existing case, raw sightings and exact message text without changing state',()=>{
   const {state,caseId}=story(),before=structuredClone(state),index=peopleIndex(state),rosa=index.find(p=>p.id===`subject:${caseId}`);
@@ -191,4 +191,61 @@ test('visible message hits exclude hidden IDs and never infer or mutate case/wel
   for(const event of events)searchSegments(event.text,'Rosa water');
   assert.deepEqual(state,before);
   assert.equal(state.cases.find(c=>c.id===caseId).welfareState,'unknown');
+});
+
+
+test('latest received report uses receipt time even when a correction describes an older observation',()=>{
+  const sighting={id:'sighting',receivedAt:'2026-11-08T02:00:00Z',observedAt:'2026-11-07T14:20:00Z',observations:[{type:'sighting'}]};
+  const correction={id:'correction',receivedAt:'2026-11-08T02:01:00Z',observedAt:'2026-11-07T12:00:00Z',processingState:'needs_review',observations:[{type:'correction'}]};
+  assert.deepEqual(latestReceivedReport([sighting,correction]),{report:correction,receiptOrderKnown:true});
+  assert.deepEqual(latestReceivedReport([correction,sighting]),{report:correction,receiptOrderKnown:true});
+});
+
+test('the most recently received failed report is retained without borrowing positive evidence',()=>{
+  const reports=[{id:'sighting',receivedAt:'2026-11-08T02:00:00Z',observations:[{type:'sighting'}]},
+    {id:'failed',receivedAt:'2026-11-08T02:01:00Z',processingPath:'failed',processingState:'needs_review',text:'Unparsed raw message',observations:[]}];
+  const latest=latestReceivedReport(reports);assert.equal(latest.report,reports[1]);assert.equal(latest.receiptOrderKnown,true);assert.equal(incomingReportKind(latest.report),'Needs review');assert.deepEqual(latest.report.observations,[]);
+});
+
+test('equal receipt instants retain later append order rather than report-ID or observation sorting',()=>{
+  const reports=[{id:'Z-first',receivedAt:'2026-11-08T02:00:00Z',observedAt:'2026-11-07T14:20:00Z'},
+    {id:'A-last',receivedAt:'2026-11-08T04:00:00+02:00',observedAt:'2026-11-07T12:00:00Z'}];
+  assert.deepEqual(latestReceivedReport(reports),{report:reports[1],receiptOrderKnown:true});
+});
+
+test('any unknown receipt explicitly falls back to the last recorded entry, including a dated last entry',()=>{
+  for(const receivedAt of [undefined,null,'','not-a-date','2026-11-08T02:00:00','2026-02-30T02:00:00Z']){
+    const undated={id:'undated',receivedAt},dated={id:'dated',receivedAt:'2026-11-08T02:00:00Z'};
+    assert.deepEqual(latestReceivedReport([undated,dated]),{report:dated,receiptOrderKnown:false});
+    assert.deepEqual(latestReceivedReport([dated,undated]),{report:undated,receiptOrderKnown:false});
+  }
+});
+
+test('latest-report lookup handles empty input and leaves report arrays, evidence and states untouched',()=>{
+  assert.equal(latestReceivedReport([]),null);
+  const first=Object.freeze({id:'first',receivedAt:'2026-11-08T02:00:00Z',welfareState:'unknown',locationState:'unknown'});
+  const last=Object.freeze({id:'last',receivedAt:'2026-11-08T02:01:00Z',text:'STOP',processingPath:'deterministic',observations:Object.freeze([])});
+  const reports=Object.freeze([first,last]),before=structuredClone(reports);
+  assert.equal(latestReceivedReport(reports).report,last);assert.equal(incomingReportKind(last),'Opt-out command');assert.deepEqual(reports,before);
+});
+
+test('incoming command kinds require the exact deterministic command and never imply welfare',()=>{
+  for(const [text,kind] of [[' STOP ','Opt-out command'],['checkin','Enrollment request']]){
+    const report={text,processingPath:'deterministic',processingState:'needs_review'};
+    assert.equal(incomingReportKind(report),kind);assert.equal(incomingReportKind({...report,processingPath:'simulated_extraction',processingState:'processed'}),'Reported observation');
+  }
+  assert.equal(incomingReportKind({text:'STOP sign at the crossing',processingPath:'deterministic',processingState:'processed'}),'Reported observation');
+  assert.equal(incomingReportKind({text:'CHECKIN now',processingPath:'deterministic',processingState:'needs_review'}),'Needs review');
+  assert.equal(incomingReportKind({processingPath:'failed',processingState:'processed'}),'Needs review');
+});
+
+test('message events use distinct incoming command kinds while preserving the complete raw report',()=>{
+  const state=createSeed();
+  state.reports.push({id:'R-stop',caseId:'C104',senderId:'neighbor-1',text:'STOP',processingPath:'deterministic',processingState:'processed',receivedAt:'2026-11-08T02:00:00Z',observedAt:null,observations:[]},
+    {id:'R-checkin',caseId:'C104',senderId:'neighbor-2',text:'CHECKIN',processingPath:'deterministic',processingState:'processed',receivedAt:'2026-11-08T02:01:00Z',observedAt:null,observations:[]});
+  const before=structuredClone(state),events=caseEvents(state,'C104');
+  assert.deepEqual(events.map(event=>event.kind),['Opt-out command','Enrollment request']);
+  assert.deepEqual(latestReceivedReport(state.reports),{report:state.reports[1],receiptOrderKnown:true});
+  assert.equal(events[0].report,state.reports[0]);assert.equal(events[0].text,'STOP');assert.equal(events[1].text,'CHECKIN');
+  assert.deepEqual(state,before);assert.equal(state.cases[0].welfareState,'unknown');assert.equal(state.cases[0].locationState,'unknown');
 });

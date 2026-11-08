@@ -4,12 +4,37 @@ export const normalize = value => String(value || '').normalize('NFKD')
 export const matches = (value, query) => normalize(query).split(' ').filter(Boolean)
   .every(term => normalize(value).includes(term));
 
+// A receipt is known only when the API timestamp identifies a valid absolute date.
+function receiptTime(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(value) || !/(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return NaN;
+  const time = Date.parse(value), day = Date.parse(value.slice(0, 10) + 'T00:00:00Z');
+  return Number.isFinite(time) && Number.isFinite(day) && new Date(day).toISOString().slice(0, 10) === value.slice(0, 10) ? time : NaN;
+}
+
+// Receipt order includes corrections, failures and commands. Unknown receipts
+// preserve the last recorded entry without claiming it arrived most recently.
+export function latestReceivedReport(reports) {
+  if (!reports.length) return null;
+  const times = reports.map(report => receiptTime(report.receivedAt));
+  if (times.some(time => !Number.isFinite(time))) return { report: reports.at(-1), receiptOrderKnown: false };
+  let latest = 0;
+  for (let index = 1; index < reports.length; index++) if (times[index] >= times[latest]) latest = index;
+  return { report: reports[latest], receiptOrderKnown: true };
+}
+
+export function incomingReportKind(report) {
+  const command = typeof report.text === 'string' ? report.text.trim().toUpperCase() : '';
+  if (report.processingPath === 'deterministic' && command === 'STOP') return 'Opt-out command';
+  if (report.processingPath === 'deterministic' && command === 'CHECKIN') return 'Enrollment request';
+  return report.processingPath === 'failed' || report.processingState === 'needs_review' ? 'Needs review' : 'Reported observation';
+}
+
 function eventsFor(state, belongs) {
   const person = id => state.participants.find(p => p.id === id)?.name || id || 'Unknown';
   return [
     ...state.reports.filter(belongs).map(r => ({
       id: r.id, caseId: r.caseId ?? null, senderId: r.senderId,
-      direction: 'incoming', kind: r.processingState === 'needs_review' ? 'Needs review' : 'Reported observation',
+      direction: 'incoming', kind: incomingReportKind(r),
       name: person(r.senderId), text: r.text, at: r.observedAt, receivedAt: r.receivedAt, report: r,
     })),
     ...state.outbox.filter(belongs).map(m => ({

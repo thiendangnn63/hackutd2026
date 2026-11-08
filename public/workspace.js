@@ -1,5 +1,5 @@
 import {node,button,icon,iconButton,title,count} from './ui.js';
-import {searchPeople,messageThreads,caseEvents,outgoingForParticipant,searchSegments,messageHitIds,normalize} from './records.js';
+import {searchPeople,messageThreads,caseEvents,outgoingForParticipant,searchSegments,messageHitIds,normalize,latestReceivedReport,incomingReportKind} from './records.js';
 import {recordFocusKey,rememberRecordFocus,restoreRecordFocus,viewportRecordFocus} from './record-focus.js';
 import {createArchiveView} from './archive-view.js';
 const $=s=>document.querySelector(s);
@@ -26,11 +26,17 @@ function searchControls(){for(const input of [$('#person-search'),$('#message-se
   const clear=iconButton('close',input.id==='person-search'?'Clear person search':'Clear message search',()=>clearSearch(input),'search-clear icon-button');clear.hidden=!input.value;input.parentElement.append(clear);
   input.addEventListener('input',()=>{clear.hidden=!input.value;});input.addEventListener('keydown',e=>{if(e.key==='Escape'&&input.value){e.preventDefault();clearSearch(input);}});
 }}
-function openConversation(caseId){
+function openConversation(caseId,messageId=null){
   selectedThread=caseId;messageScope='all';threadOpen=true;
   $('#message-search').value='';$('#message-search').dispatchEvent(new Event('input'));threadOpen=true;
   if(location.hash==='#messages')renderMessages();else{location.hash='messages';route();}
-  requestAnimationFrame(()=>{if(location.hash!=='#messages'||selectedThread!==caseId)return;const root=$('#messages-workspace');if(mobile())revealMobileDetail(root);else root.querySelector('[data-record-focus=heading]')?.focus({preventScroll:true});});
+  requestAnimationFrame(()=>{
+    if(location.hash!=='#messages'||selectedThread!==caseId)return;
+    const root=$('#messages-workspace');if(mobile())revealMobileDetail(root);
+    const bubble=messageId?[...root.querySelectorAll('[data-message-id]')].find(element=>element.dataset.messageId===messageId):null;
+    if(bubble&&revealMessage(root,bubble)){bubble.focus({preventScroll:true});return;}
+    if(!mobile())root.querySelector('[data-record-focus=heading]')?.focus({preventScroll:true});
+  });
 }
 function openMessageLab(caseId){
   if(!caseId||caseId==='unassigned')return;
@@ -84,16 +90,22 @@ function updateMessageMatches(){
   if(summary)summary.textContent=state.ids.length?`${state.index+1} of ${state.ids.length} ${state.mode==='full'?'matching':'related'} ${state.ids.length===1?'message':'messages'}`:'No message-content match';
   const bar=conversation.querySelector('.message-matchbar');if(bar)bar.dataset.matchMode=state.mode;
 }
+function revealMessage(root,bubble){
+  const {view,detail,layout}=readingParts(root);
+  if(!bubble||!detail||view.hidden||(mobile()&&!layout.classList.contains('is-detail')))return false;
+  const scroller=mobile()?view:detail.querySelector('.conversation-events');
+  const inset=mobile()?(detail.querySelector('.conversation-context')?.getBoundingClientRect().height||0)+14:18;
+  const target=bubble.getBoundingClientRect().height>scroller.clientHeight-inset?(bubble.querySelector('.search-mark')||bubble):bubble;
+  scroller.scrollTop=Math.max(0,scroller.scrollTop+target.getBoundingClientRect().top-scroller.getBoundingClientRect().top-inset);
+  rememberReading(root);return true;
+}
 function jumpToMessageMatch(){
   const root=$('#messages-workspace'),state=activeMessageSearch,{view,detail,layout}=readingParts(root);
   if(!state?.ids.length||!detail||detail.dataset.threadId!==state.threadId||view.hidden||(mobile()&&!layout.classList.contains('is-detail')))return false;
   const bubble=[...detail.querySelectorAll('.message-bubble')].find(e=>e.dataset.messageId===state.ids[state.index]);
   if(!bubble)return false;
-  const scroller=mobile()?view:detail.querySelector('.conversation-events');
-  const inset=mobile()?(detail.querySelector('.conversation-context')?.getBoundingClientRect().height||0)+14:18;
-  const target=bubble.getBoundingClientRect().height>scroller.clientHeight-inset?(bubble.querySelector('.search-mark')||bubble):bubble;
-  scroller.scrollTop=Math.max(0,scroller.scrollTop+target.getBoundingClientRect().top-scroller.getBoundingClientRect().top-inset);
-  messageMatchPositions.set(state.key,state.ids[state.index]);updateMessageMatches();rememberReading(root);
+  if(!revealMessage(root,bubble))return false;
+  messageMatchPositions.set(state.key,state.ids[state.index]);updateMessageMatches();
   return true;
 }
 function navigateMessageMatch(direction){
@@ -193,7 +205,28 @@ function renderPeople(queryChanged=false,focusOverride=null){
   const p=people.find(p=>p.id===selectedPerson),record=node('article','person-record');record.setAttribute('aria-label',`${p.name} record`);record.tabIndex=-1;record.dataset.personId=p.id;record.dataset.readingReady='false';recordFocusKey(record,'detail');
   const back=button('',()=>{personOpen=false;renderPeople();focusRecordRow(root,selectedPerson);},'mobile-record-back text-button');recordFocusKey(back,'back');back.append(icon('chevron'),document.createTextNode('All people'));record.append(back);
   const heading=node('div','record-profile'),copy=node('div');copy.append(node('div','view-kicker',p.kind),highlighted('h2','',p.name,query));recordFocusKey(copy.querySelector('h2'),'heading').tabIndex=-1;heading.append(node('div','person-avatar',initials(p.name)),copy);record.append(heading);
-  const meta=node('div','person-meta');meta.append(pill(`Welfare: ${title(p.welfare)}`,welfareTone(p.welfare)),pill(title(p.location)));if(p.participantId)meta.append(pill(p.description.startsWith('Opted out')?'Outreach off':'Outreach opted in'));record.append(meta,highlighted('p','record-description',p.description,query));
+  const meta=node('div','person-meta');meta.append(pill(`Welfare: ${title(p.welfare)}`,welfareTone(p.welfare)),pill(title(p.location)));if(p.participantId)meta.append(pill(p.description.startsWith('Opted out')?'Outreach off':'Outreach opted in'));record.append(meta);
+  const reports=familyState.reports.filter(r=>p.participantId?r.senderId===p.participantId:p.caseIds.includes(r.caseId));
+  const latest=latestReceivedReport(reports);
+  const reportLink=(report,key,label='Open message')=>{
+    const thread=familyState.cases.some(c=>c.id===report.caseId)?report.caseId:'unassigned';
+    const link=recordFocusKey(button(label,()=>openConversation(thread,report.id),'text-button report-message-link'),key);
+    link.setAttribute('aria-label',`${label} ${report.id}`);link.append(icon('arrow'));return link;
+  };
+  if(latest){
+    const report=latest.report,preview=node('section','latest-report');
+    preview.append(node('h3','',latest.receiptOrderKnown?'Latest received report':'Recent report · receipt order unknown'));
+    const sender=familyState.participants.find(sender=>sender.id===report.senderId)?.name||'Unknown sender';
+    preview.append(highlighted('p','latest-report-source',`${report.id} · ${sender}`,query),highlighted('p','latest-report-text',report.text,query));
+    preview.append(node('p','workspace-note',`Received ${time(report.receivedAt)} · Observed ${time(report.observedAt)}`));
+    const label=report.reviewFlags?.includes('correction_or_negation')?'Correction or negation · needs review':incomingReportKind(report);
+    preview.append(pill(label,report.processingState==='needs_review'?'amber':''),node('p','workspace-note',report.processingPath==='failed'?'Raw text · interpretation unavailable. Human review is needed.':'Raw message · does not independently establish location or welfare.'),reportLink(report,'latest-report:'+report.id,'Open full message'));
+    record.append(preview);
+  }
+  if(p.participantId)record.append(highlighted('p','record-description',p.description,query));
+  else{
+    const original=node('section','original-inquiry');original.append(node('h3','','Original inquiry'),highlighted('p','record-description',p.description,query),node('p','workspace-note','Original family description · newer reports are shown separately.'));record.append(original);
+  }
   const caseLinks=node('div','person-case-links');for(const id of p.caseIds){const c=familyState.cases.find(c=>c.id===id);const b=button('',()=>openConversation(id),'case-link');recordFocusKey(b,'case:'+id);b.append(icon('messages'),document.createTextNode(`${id} · ${p.participantId?subjectName(c):'Open conversation'}`),icon('arrow'));caseLinks.append(b);}record.append(caseLinks);
   if(!p.participantId){
     const c=familyState.cases.find(c=>c.id===p.caseIds[0]);
@@ -203,8 +236,7 @@ function renderPeople(queryChanged=false,focusOverride=null){
   }
   const last=node('section','record-section');last.append(node('h3','',p.participantId?'Last shared location':'Family’s last contact'),recordEvent(p.participantId?'Participant report':'Initial family report',p.tile?(p.tile==='OUTSIDE'?'Outside the exercise area':`Oak District · schematic tile ${p.tile}.`):'No location has been recorded.',p.lastAt,'Reported location · not current tracking',query));record.append(last);
   const evidence=node('section','record-section');evidence.append(node('h3','',p.participantId?'Reports contributed':'Reported sightings & evidence'));
-  const reports=familyState.reports.filter(r=>p.participantId?r.senderId===p.participantId:p.caseIds.includes(r.caseId));
-  for(const r of [...reports].sort((a,b)=>Date.parse(b.observedAt||b.receivedAt)-Date.parse(a.observedAt||a.receivedAt))){const observed=(r.observations||[]).filter(o=>['sighting','self_check_in','correction'].includes(o.type));evidence.append(recordEvent(`${r.id} · ${observed.length?observed.map(o=>title(o.type)).join(' / '):'Raw report'} · ${r.caseId||'Unassigned'}`,r.text,r.observedAt,`Received ${time(r.receivedAt)} · reported, not independently verified`,query));}
+  for(const r of [...reports].sort((a,b)=>Date.parse(b.observedAt||b.receivedAt)-Date.parse(a.observedAt||a.receivedAt))){const observed=(r.observations||[]).filter(o=>['sighting','self_check_in','correction'].includes(o.type));const event=recordEvent(`${r.id} · ${observed.length?observed.map(o=>title(o.type)).join(' / '):incomingReportKind(r)} · ${r.caseId||'Unassigned'}`,r.text,r.observedAt,`Received ${time(r.receivedAt)} · reported, not independently verified`,query);event.append(reportLink(r,'report:'+r.id));evidence.append(event);}
   if(!reports.length)evidence.append(node('p','record-empty',p.participantId?'No contributed reports are recorded.':'No sightings or reports have been recorded.'));record.append(evidence);
   const messages=node('section','record-section');messages.append(node('h3','',p.participantId?'Messages to this participant':'Related messages'));
   const events=(p.participantId?outgoingForParticipant(familyState,p.participantId):p.caseIds.flatMap(id=>caseEvents(familyState,id)).filter(e=>e.direction==='outgoing')).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at));
