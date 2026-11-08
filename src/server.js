@@ -8,7 +8,7 @@ import { SatelliteService } from './satellite.js';
 import { HoustonService } from './houston-service.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/houston.js': ['houston.js', 'text/javascript'], '/houston.css': ['houston.css', 'text/css'], '/data/houston-imagery.jpg': ['data/houston-imagery.jpg', 'image/jpeg'] };
+const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/houston.js': ['houston.js', 'text/javascript'], '/houston-camera.js': ['houston-camera.js', 'text/javascript'], '/houston.css': ['houston.css', 'text/css'], '/data/houston-imagery.jpg': ['data/houston-imagery.jpg', 'image/jpeg'] };
 async function body(req) {
   if (!String(req.headers['content-type'] || '').startsWith('application/json')) throw new InputError('Use application/json.', 415);
   let bytes = 0, data = '';

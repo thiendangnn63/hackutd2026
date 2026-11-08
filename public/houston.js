@@ -1,4 +1,5 @@
 // Independent read-only mayor demo. Never changes the family exercise.
+import { fitCamera, zoomCamera, panCamera, viewBox, fitBounds, MAX_ZOOM } from './houston-camera.js';
 const root = document.querySelector('#houston-content');
 const status = document.querySelector('#houston-status');
 const scenario = document.querySelector('#houston-scenario');
@@ -49,7 +50,78 @@ function render(data) {
   mapPanel.append(node('p','houston-description',data.geography?.regionDescription || 'Houston subdivisions clipped to the city boundary. Neighboring cities are excluded.'));
   const mapRow = node('div','houston-map-row');
   const frame = node('div','houston-map-frame');
-  const svg = svgNode('svg', {viewBox:'0 0 800 630',role:'group','aria-label':'Houston map. Focus or select an area to inspect open requests.'});
+  const svg = svgNode('svg', {viewBox:'0 0 800 630',role:'group',tabindex:0,'aria-label':'Houston map. Hover or focus an area for counts. Use plus and minus to zoom, arrow keys to pan, and zero to fit Houston.'});
+  let camera=fitCamera();let gesture=null;let suppressClick=false;
+  const tooltip=node('div','houston-map-tooltip');tooltip.id='houston-map-tooltip';tooltip.setAttribute('role','tooltip');tooltip.hidden=true;
+  const showTooltip=r=>{tooltip.replaceChildren(node('strong','',`${r.name} · ${count(r.openCount)} open requests`),node('span','',number(r.openCount)?categories.filter(c=>number(r.categories?.[c])).map(c=>`${title(c)} ${count(r.categories[c])}`).join(' · '):'Unknown · coverage check needed'));tooltip.hidden=false;};
+  const controls=node('div','houston-map-controls');controls.setAttribute('role','group');controls.setAttribute('aria-label','Houston map controls');
+  const zoomIn=button('+',()=>changeCamera(zoomCamera(camera,1.5)));
+  const zoomOut=button('−',()=>changeCamera(zoomCamera(camera,1/1.5)));
+  const reset=button('Fit Houston',()=>resetMap());
+  zoomIn.setAttribute('aria-label','Zoom in');zoomOut.setAttribute('aria-label','Zoom out');
+  const zoomStatus=node('span','houston-zoom-status','Full city view');zoomStatus.setAttribute('aria-live','polite');
+  controls.append(zoomIn,zoomOut,reset,zoomStatus);mapPanel.append(controls);
+  function changeCamera(next) {
+    camera=next;svg.setAttribute('viewBox',viewBox(camera));
+    zoomIn.disabled=camera.zoom>=MAX_ZOOM;zoomOut.disabled=camera.zoom<=1;
+    zoomStatus.textContent=camera.zoom===1?'Full city view':'Zoomed view';
+  }
+  function worldPoint(clientX,clientY) {
+    const point=svg.createSVGPoint();point.x=clientX;point.y=clientY;
+    return point.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  const pointers=new Map();
+  function beginGesture(moved=false) {
+    const points=[...pointers.values()];if(!points.length){gesture=null;return;}
+    const a=points[0],b=points[1] || a;
+    const center={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+    gesture={camera:{...camera},center,anchor:worldPoint(center.x,center.y),
+      distance:points.length>1?Math.hypot(a.x-b.x,a.y-b.y):0,
+      unit:1/svg.getScreenCTM().a,moved,target:points.length===1?a.target:null};
+  }
+  svg.addEventListener('pointerdown',event=>{
+    if(event.button!==0)return;
+    pointers.set(event.pointerId,{x:event.clientX,y:event.clientY,target:event.target.closest('.houston-region')});
+    suppressClick=false;beginGesture(pointers.size>1);svg.setPointerCapture(event.pointerId);
+  });
+  svg.addEventListener('pointermove',event=>{
+    if(!pointers.has(event.pointerId))return;
+    pointers.set(event.pointerId,{...pointers.get(event.pointerId),x:event.clientX,y:event.clientY});
+    const points=[...pointers.values()],a=points[0],b=points[1]||a;
+    const center={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+    const dx=center.x-gesture.center.x,dy=center.y-gesture.center.y;
+    if(Math.hypot(dx,dy)>4||points.length>1)gesture.moved=true;
+    if(!gesture.moved)return;
+    tooltip.hidden=true;svg.classList.add('is-panning');
+    const factor=points.length>1&&gesture.distance>0?Math.hypot(a.x-b.x,a.y-b.y)/gesture.distance:1;
+    const next=zoomCamera(gesture.camera,factor,gesture.anchor);
+    changeCamera(panCamera(next,-dx*gesture.unit*gesture.camera.zoom/next.zoom,-dy*gesture.unit*gesture.camera.zoom/next.zoom));
+  });
+  function endPointer(event,cancelled=false) {
+    if(!pointers.has(event.pointerId))return;
+    const tap=!cancelled&&!gesture.moved&&pointers.size===1?gesture.target:null;
+    suppressClick=!cancelled;pointers.delete(event.pointerId);svg.classList.remove('is-panning');
+    if(svg.hasPointerCapture(event.pointerId))svg.releasePointerCapture(event.pointerId);
+    if(pointers.size)beginGesture(true);else gesture=null;
+    if(tap){tap.focus();const r=regions.find(r=>r.id===tap.dataset.regionId);if(r)select(r,true);}
+  }
+  svg.addEventListener('pointerup',event=>endPointer(event));
+  svg.addEventListener('pointercancel',event=>endPointer(event,true));
+  svg.addEventListener('click',event=>{if(suppressClick){event.preventDefault();event.stopPropagation();suppressClick=false;}},true);
+  svg.addEventListener('wheel',event=>{event.preventDefault();tooltip.hidden=true;changeCamera(zoomCamera(camera,Math.exp(-Math.max(-120,Math.min(120,event.deltaY))*.004),worldPoint(event.clientX,event.clientY)));},{passive:false});
+  svg.addEventListener('keydown',event=>{
+    let next;
+    if(['+','='].includes(event.key))next=zoomCamera(camera,1.5);
+    if(event.key==='-')next=zoomCamera(camera,1/1.5);
+    if(event.key==='0'||event.key==='Escape'){event.preventDefault();resetMap();return;}
+    const delta=70/camera.zoom;
+    if(event.key==='ArrowLeft')next=panCamera(camera,-delta,0);
+    if(event.key==='ArrowRight')next=panCamera(camera,delta,0);
+    if(event.key==='ArrowUp')next=panCamera(camera,0,-delta);
+    if(event.key==='ArrowDown')next=panCamera(camera,0,delta);
+    if(next){event.preventDefault();changeCamera(next);}
+  });
+  changeCamera(camera);
   const [west,south,east,north] = data.city.bbox;
   const cos = Math.cos((north + south) / 2 * Math.PI / 180);
   const scale = Math.min(730 / ((east-west)*cos), 570 / (north-south));
@@ -73,40 +145,48 @@ function render(data) {
     image.addEventListener('error',()=>{image.remove(); imageryNote.textContent='Aerial imagery unavailable. Geographic boundaries remain visible; report counts are unchanged.';}); layer.append(image);
     imageryNote.textContent=`Historical aerial imagery · ${basemap.date || 'date not provided'} · ${basemap.attribution || 'Attribution unavailable'}. Not live disaster imagery.`;
   } else imageryNote.textContent='Aerial imagery unavailable. Showing geographic boundaries only; no imagery is fabricated.';
-  const detail=node('article','houston-detail'); detail.setAttribute('aria-label','Selected Houston area');
+  const detail=node('article','houston-detail'); detail.setAttribute('aria-label','Selected Houston area');detail.setAttribute('tabindex','-1');detail.hidden=true;
+  detail.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();resetMap();}});
   const paths=new Map();let selected=null;let locked=false;
+  function resetMap() {
+    locked=false;selected=null;detail.hidden=true;tooltip.hidden=true;
+    for(const p of paths.values()){p.classList.remove('is-selected');p.setAttribute('aria-pressed','false');}
+    changeCamera(fitCamera());svg.focus();
+  }
   function select(r,lock=false) {
-    if(locked&&!lock) return;
+    if((locked||gesture?.moved)&&!lock) return;
     selected=r; if(lock) locked=true;
     for(const [id,p] of paths) {p.classList.toggle('is-selected',id===r.id);p.setAttribute('aria-pressed',String(id===r.id&&locked));}
-    detail.replaceChildren(node('div','eyebrow',locked?'AREA DETAILS · PINNED':'AREA DETAILS · PREVIEW'),node('h3','',r.name));
+    if(!lock)return;
+    changeCamera(fitBounds(paths.get(r.id).getBBox()));tooltip.hidden=true;detail.hidden=false;
+    detail.replaceChildren(button('← Back to Houston',resetMap),node('div','eyebrow','AREA STATISTICS'),node('h3','',r.name));
     const total=node('div','houston-detail-total');total.append(node('strong','',count(r.openCount)),node('span','','open requests'));detail.append(total);
     detail.append(node('p','houston-intensity',max ? `${((number(r.openCount)/max)*100).toFixed(1)}% of maximum · ${count(r.openCount)} / ${count(max)}` : 'No open requests in this scenario'));
     const breakdown=node('dl','houston-breakdown');for(const c of categories)breakdown.append(node('dt','',title(c)),node('dd','',count(r.categories?.[c])));detail.append(breakdown);
     detail.append(node('p','houston-priority',number(r.openCount)?`Review priority: ${title(r.priority)}`:'Coverage status: unknown · check needed'));
-    detail.append(node('p','houston-description','Red intensity shows volume only. Review priority is a separate human-review order. Need categories can overlap: 100 evacuation + 100 supplies may represent the same 100 distinct requests.'));
-    detail.append(button(locked?'Unpin details':'Pin these details',()=>{locked=!locked;select(selected,locked);}));
+    detail.append(node('p','houston-description','Need categories can overlap. Request volume is not severity; review priority requires human judgment.'));
+    detail.focus({preventScroll:true});
   }
   for(const r of regions) {
     const p=svgNode('path',{d:path(r.geometry),fill:number(r.openCount)?'#e2292f':'url(#houston-unknown)','fill-opacity':number(r.openCount)?number(r.openCount)/max:1,'fill-rule':'evenodd',stroke:'#f5f6e8','stroke-width':1.1,'vector-effect':'non-scaling-stroke',tabindex:0,role:'button','aria-pressed':'false','aria-label':`${r.name}: ${count(r.openCount)} open requests, ${max?((number(r.openCount)/max)*100).toFixed(1):0}% of maximum; ${number(r.openCount)?'review priority '+title(r.priority):'unknown, coverage check needed'}`,class:'houston-region'});
-    p.append(svgNode('title'));p.lastChild.textContent=`${r.name} · ${count(r.openCount)} open requests`;
-    p.addEventListener('pointerenter',()=>select(r));p.addEventListener('focus',()=>select(r));p.addEventListener('click',()=>select(r,true));p.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(r,true);}if(e.key==='Escape'){locked=false;select(r);}});layer.append(p);paths.set(r.id,p);
+    p.dataset.regionId=r.id;p.setAttribute('aria-describedby',tooltip.id);
+    p.addEventListener('pointerenter',()=>{if(!gesture?.moved){select(r);showTooltip(r);}});
+    p.addEventListener('pointerleave',()=>{if(document.activeElement!==p)tooltip.hidden=true;});
+    p.addEventListener('focus',()=>{select(r);showTooltip(r);});
+    p.addEventListener('blur',()=>{tooltip.hidden=true;});
+    p.addEventListener('click',()=>select(r,true));p.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(r,true);}});layer.append(p);paths.set(r.id,p);
   }
-  for (const r of regions.filter(r => number(r.openCount) && Array.isArray(r.labelPoint))) {
-    const [x,y] = project(r.labelPoint);
-    const label = svgNode('text', {x,y,'text-anchor':'middle','dominant-baseline':'middle',class:'houston-map-count','pointer-events':'none'}); label.textContent=count(r.openCount);layer.append(label);
-  }
+  svg.addEventListener('pointerleave',()=>{tooltip.hidden=true;});
+  svg.addEventListener('focusout',event=>{if(!svg.contains(event.relatedTarget))tooltip.hidden=true;});
   svg.append(layer,svgNode('path',{d:cityPath,fill:'none',stroke:'#244c45','stroke-width':1.8,'vector-effect':'non-scaling-stroke','pointer-events':'none'}));
-  frame.append(svg,node('span','houston-north','N ↑'),node('span','houston-map-label','HOUSTON · TEXAS'));
+  frame.append(svg,detail,tooltip,node('span','houston-north','N ↑'),node('span','houston-map-label','HOUSTON · TEXAS'));
   const legend=node('div','houston-scale');legend.setAttribute('aria-label',`Linear red intensity scale: 0 to ${max} open requests`);
   legend.append(node('strong','',count(max)));const bar=node('div','houston-colorbar');if(!max)bar.classList.add('is-empty');legend.append(bar,node('strong','','0'),node('span','','OPEN REQUESTS'));
-  mapRow.append(frame,legend);mapPanel.append(mapRow,node('p','houston-map-help','Hatched areas: no reports, safety unknown. Hover or focus to preview; click or Enter to pin. Escape unpins.'),imageryNote);
+  mapRow.append(frame,legend);mapPanel.append(mapRow,node('p','houston-map-help','Hover or focus for counts. Tap, click or Enter to zoom into an area and see its statistics on the map. Zoom with + / −, scroll or pinch; drag to pan. Keyboard: + / −, arrows, 0 or Escape to fit Houston. Hatched areas have no reports; safety is unknown.'),imageryNote);
   const source=node('p','houston-source',data.geography?.attribution || 'Geographic source attribution unavailable.');
   for(const sourceEntry of data.geography?.sourceUrls || []) { const url=typeof sourceEntry==='string'?sourceEntry:sourceEntry.url;if(typeof url==='string'&&/^https:\/\//.test(url)){const a=node('a','', ' Source ↗');a.href=url;a.target='_blank';a.rel='noopener noreferrer';source.append(a);} }
   mapPanel.append(source);
-  const aside=node('aside','houston-map-aside');aside.append(detail,node('p','houston-warning','No reports does not mean safe. People without phones or hotline access may be missing from this picture.'));
-  grid.append(mapPanel,aside);root.append(grid);
-  if(regions.length)select([...regions].sort((a,b)=>number(b.openCount)-number(a.openCount))[0]);
+  grid.append(mapPanel);root.append(grid,node('p','houston-warning','No reports does not mean safe. People without phones or hotline access may be missing from this picture.'));
   const lanes=node('div','houston-lanes');
   function lane(eyebrow,titleText,description){const l=node('article','houston-lane');l.append(node('div','eyebrow',eyebrow),node('h2','',titleText),node('p','houston-description',description));lanes.append(l);return l;}
   const review=lane('HUMAN REVIEW ORDER','Reported needs','Medical → evacuation → supplies → other. Demo review order only, not automated medical triage or dispatch.');
