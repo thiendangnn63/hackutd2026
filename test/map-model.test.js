@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {boundCameraToExtent,searchMapRecords,geometryBounds,insideGeometry,hasIntersection,demoLocations,buildSubtiles,hospitalityFixture,hospitalityForRegion,NEED_TYPES,detailLevel,cameraView,zoomAt} from '../public/map-model.js';
+import {boundCameraToExtent,searchMapRecords,geometryBounds,insideGeometry,hasIntersection,demoLocations,buildSubtiles,hospitalityFixture,hospitalityForRegion,NEED_TYPES,detailLevel,cameraView,zoomAt,MAX_MAP_ZOOM} from '../public/map-model.js';
 import {HoustonService} from '../src/houston-service.js';
 const root=new URL('..',import.meta.url).pathname;
 const square={type:'Polygon',coordinates:[[[0,0],[4,0],[4,4],[0,4],[0,0]],[[1,1],[3,1],[3,3],[1,3],[1,1]]]};
@@ -169,4 +169,15 @@ test('raster coverage bounds limit pan to real imagery without repeating map geo
   assert.ok(view.x+view.width<=extent.x+extent.width);assert.ok(view.y+view.height<=extent.y+extent.height);
   assert.deepEqual(camera,{x:999999,y:-999999,zoom:.2});
   assert.deepEqual(boundCameraToExtent({x:100,y:100,zoom:1},{x:0,y:0,width:100,height:100},800,630),{x:50,y:50,zoom:1});
+});
+
+
+test('street-level zoom passes the former limit and remains anchored at the shared ceiling',()=>{
+  const camera={x:400,y:315,zoom:24},anchor={x:410,y:320};
+  const closer=zoomAt(camera,2,anchor);
+  assert.equal(closer.zoom,48);
+  const capped=zoomAt(closer,100,anchor);
+  assert.equal(capped.zoom,MAX_MAP_ZOOM);
+  assert.equal((anchor.x-capped.x)*capped.zoom,(anchor.x-camera.x)*camera.zoom);
+  assert.equal((anchor.y-capped.y)*capped.zoom,(anchor.y-camera.y)*camera.zoom);
 });

@@ -25,6 +25,8 @@ const files = {
   '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
   '/beacon-logo.svg': ['beacon-logo.svg', 'image/svg+xml'],
   '/workspace.js': ['workspace.js', 'text/javascript'],
+  '/archive-view.js': ['archive-view.js', 'text/javascript'],
+  '/record-focus.js': ['record-focus.js', 'text/javascript'],
   '/workspace.css': ['workspace.css', 'text/css'],
   '/data/houston-imagery.jpg': ['data/houston-imagery.jpg', 'image/jpeg'],
   '/data/houston-streets.json': ['data/houston-streets.json', 'application/json'],

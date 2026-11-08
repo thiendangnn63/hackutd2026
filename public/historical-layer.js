@@ -9,7 +9,7 @@ function history(force=false){
 export function createHistoricalLayer({project,unproject,onReady=()=>{},onStatus=()=>{}}){
   const element=svgNode('g',{class:'map-event-imagery','aria-hidden':'true','pointer-events':'none'}),unknown=svgNode('g',{class:'map-event-unknown'}),images=svgNode('g');element.append(unknown,images);element.style.display='none';
   let data=null,mode='aerial',selectedDate=null,view=null,size=null,disposed=false,sceneKey='',outsideCapture=false,failed=new Set();
-  const nodes=new Map(),backdrop=svgNode('rect',{fill:'#182330','fill-opacity':.72}),missingPattern=svgNode('rect',{fill:'url(#event-unknown-hatch)',opacity:.55});
+  const nodes=new Map(),backdrop=svgNode('rect',{fill:'#182330','fill-opacity':.62});
   const rectangle=bbox=>{const a=project([bbox[0],bbox[3]]),b=project([bbox[2],bbox[1]]);return {x:a[0],y:a[1],width:b[0]-a[0],height:b[1]-a[1]};};
   const scenes=()=>mode==='radar'?(data?.radar?.available?[data.radar]:[]):mode==='flood'?(data?.flood.imagery||[]):['water','event-rgb'].includes(mode)?(data?.water.scenes||[]).filter(scene=>mode==='water'?scene.waterUrl:scene.rgbUrl):[];
   const selected=()=>scenes().find(scene=>scene.date===selectedDate)||scenes().find(scene=>scene.date==='2017-08-30')||scenes().find(scene=>scene.date>='2017-08-29')||scenes()[0];
@@ -44,11 +44,11 @@ export function createHistoricalLayer({project,unproject,onReady=()=>{},onStatus
       const key=mode+'|'+scene.id+'|'+scene.date;
       if(sceneKey!==key){
         for(const item of nodes.values())item.image.remove();nodes.clear();unknown.replaceChildren();
-        unknown.append(backdrop,missingPattern);sceneKey=key;
+        unknown.append(backdrop);sceneKey=key;
       }
       const a=unproject([view.x,view.y+view.height]),b=unproject([view.x+view.width,view.y]),geoView=[a[0],a[1],b[0],b[1]];
       outsideCapture=!intersects(bbox,geoView);
-      for(const rect of [backdrop,missingPattern])for(const [key,value]of Object.entries(view))rect.setAttribute(key,value);
+      for(const rect of [backdrop])for(const [key,value]of Object.entries(view))rect.setAttribute(key,value);
       let sources=[];
       if(mode==='flood'){
         if(scene.overview)sources.push(scene.overview);

@@ -43,6 +43,11 @@ DETAILS = [
     ('2017-08-31', 'kingwood', 'Kingwood / West Fork San Jacinto', [-95.225, 29.98, -95.145, 30.045], ['20170831a-rgb']),
     ('2017-08-31', 'san-jacinto', 'Lake Houston / San Jacinto River', [-95.135, 29.815, -95.045, 29.92], ['20170831a-rgb']),
 ]
+FINE_DETAILS = [
+    ('2017-08-30', 'baker-road-fine', 'Barker / Baker Road · 0.5 m detail', [-95.72, 29.74472, -95.69548, 29.76780], ['20170830-rgb']),
+    ('2017-08-31', 'kingwood-fine', 'Kingwood / West Fork · 0.5 m detail', [-95.22, 30.0, -95.195, 30.023], ['20170831a-rgb']),
+]
+NATIVE_RESOLUTION_NOTE = 'NOAA viewer reports approximately 50cm at zoom18. This bounded cache uses zoom12 overviews, zoom16 area detail, and two small zoom18 native-detail crops; actual cached resolution is recorded per image.'
 
 
 def timestamp():
@@ -78,6 +83,7 @@ def spec(identifier, label, date, bounds, zoom, layers, role):
 def specs():
     result = [spec('harvey-' + date.replace('-', '') + '-overview', 'Houston flight coverage', date, BOUNDS, 12, layers, 'overview') for date, layers in DATES]
     result += [spec('harvey-' + date.replace('-', '') + '-' + key, label, date, bounds, 16, layers, 'detail') for date, key, label, bounds, layers in DETAILS]
+    result += [spec('harvey-' + date.replace('-', '') + '-' + key, label, date, bounds, 18, layers, 'detail') for date, key, label, bounds, layers in FINE_DETAILS]
     return result
 
 
@@ -197,7 +203,7 @@ def render(record, cache, quality):
 
 def check():
     manifest = json.loads(MANIFEST.read_text())
-    count, total = 0, 0
+    count, total, identifiers = 0, 0, set()
     for day in manifest['imagery']:
         for record in [day['overview'], *day['detail']]:
             path = OUTPUT / record['file']
@@ -206,17 +212,28 @@ def check():
             assert len(content) == record['bytes'], path
             assert record['date'] == day['date'], record['id']
             assert record['crs'] == 'EPSG:4326' and record['warpErrorOutputPixelsBound'] < 0.05
+            assert record['id'] not in identifiers
+            identifiers.add(record['id'])
+            expected = next(item for item in specs() if item['id'] == record['id'])
+            for key in ['bbox', 'width', 'height', 'sourceCacheLevel', 'sourceLayers']:
+                assert record[key] == expected[key], (record['id'], key)
+            center = (record['bbox'][1] + record['bbox'][3]) / 2
+            meters = math.cos(math.radians(center)) * 2 * math.pi * RADIUS / (256 * 2 ** record['sourceCacheLevel'])
+            assert math.isclose(record['sourceMetersPerPixel'], meters, rel_tol=1e-10)
             assert 0 < record['coverageFraction'] <= 1
             with Image.open(path) as image:
                 assert image.size == (record['width'], record['height']), path
-                assert image.mode == 'RGBA', path
-                assert image.getchannel('A').getbbox(), path
+                # WebP omits an unnecessary alpha channel for wholly observed crops.
+                assert image.mode in ('RGB', 'RGBA'), path
+                alpha = image.convert('RGBA').getchannel('A')
+                assert alpha.getbbox(), path
                 if record['coverageFraction'] < 0.99:
-                    assert image.getchannel('A').getextrema()[0] == 0, path
+                    assert alpha.getextrema()[0] == 0, path
                 image.load()
             count += 1
             total += len(content)
-    assert count == 9
+    expected = {record['id'] for record in specs()}
+    assert identifiers == expected
     print(f'Verified {count} dated georeferenced NOAA RGB images, {total:,} bytes; checksums, dimensions, dates, reprojection bounds, and real no-data transparency passed.')
 
 
@@ -225,6 +242,7 @@ def main():
     parser.add_argument('--cache-dir', type=Path, default=Path('/tmp/hackutd-flood-cache'))
     parser.add_argument('--offline', action='store_true', help='Rebuild only from previously cached public source tiles')
     parser.add_argument('--offline-check', action='store_true', help='Verify bundled output without network')
+    parser.add_argument('--fine-only', action='store_true', help='Add/rebuild only the two bounded zoom18 crops, preserving existing overview/area files')
     parser.add_argument('--workers', type=int, default=6)
     parser.add_argument('--timeout', type=int, default=30)
     parser.add_argument('--quality', type=int, default=85)
@@ -234,13 +252,13 @@ def main():
         return
     args.cache_dir.mkdir(parents=True, exist_ok=True)
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    records = specs()
+    records = [record for record in specs() if not args.fine_only or record['sourceCacheLevel'] == 18]
     identifiers = set()
     for record in records:
         col0, col1, row0, row1 = source_range(record['bbox'], record['sourceCacheLevel'])
         identifiers.update((layer, record['sourceCacheLevel'], col, row) for layer in record['sourceLayers'] for row in range(row0, row1 + 1) for col in range(col0, col1 + 1))
     print(f'Preparing {len(identifiers)} bounded public NOAA source tiles for {len(records)} images.', flush=True)
-    with ThreadPoolExecutor(max_workers=max(1, min(args.workers, 8))) as pool:
+    with ThreadPoolExecutor(max_workers=max(1, min(args.workers, 6))) as pool:
         jobs = [pool.submit(fetch, identifier, args.cache_dir, args.offline, args.timeout) for identifier in sorted(identifiers)]
         for index, job in enumerate(as_completed(jobs), 1):
             job.result()
@@ -251,6 +269,19 @@ def main():
         result = render(record, args.cache_dir, args.quality)
         rendered[result['id']] = result
         print(f"Rendered {result['id']}: {result['width']}x{result['height']}, {result['bytes']:,} bytes, {result['coverageFraction']:.1%} actual image coverage", flush=True)
+    if args.fine_only:
+        manifest = json.loads(MANIFEST.read_text())
+        for day in manifest['imagery']:
+            day['detail'] = [record for record in day.get('detail', []) if record['id'] not in rendered]
+            day['detail'].extend(record for record in rendered.values() if record['date'] == day['date'])
+        manifest['source']['nativeResolutionNote'] = NATIVE_RESOLUTION_NOTE
+        manifest['processing']['fineDetail'] = 'Two bounded EPSG4326 zoom18 crops cache NOAA native approximately50cm imagery at Barker/Baker Road (August30) and Kingwood/West Fork (August31). No upscaling from the zoom16 cache.'
+        manifest['preparedAt'] = timestamp()
+        temporary = MANIFEST.with_suffix('.json.tmp')
+        temporary.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
+        temporary.replace(MANIFEST)
+        check()
+        return
     imagery = []
     for date, layers in DATES:
         identifier = 'harvey-' + date.replace('-', '')
@@ -269,7 +300,7 @@ def main():
                    'tileSize': 256, 'eventAcquisitionDateRange': ['2017-08-27', '2017-09-03'],
                    'product': 'Directly georeferenced emergency-response RGB mosaics; not a cadastral or navigation survey',
                    'nativeProductGroundSampleDistanceMetersApprox': 0.50,
-                   'nativeResolutionNote': 'NOAA viewer reports approximately 50cm at zoom18. This bounded cache uses coarser zoom12 overview and zoom16 detail, with actual cached resolution recorded per image.',
+                   'nativeResolutionNote': NATIVE_RESOLUTION_NOTE,
                    'termsUrl': METADATA_URL,
                    'license': 'CC0-1.0', 'licenseUrl': 'https://creativecommons.org/publicdomain/zero/1.0/',
                    'licenseNote': 'NOAA InPort item59048 explicitly identifies this dataset as CC0-1.0, with no access restrictions.',

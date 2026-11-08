@@ -11,7 +11,7 @@ test('zoom preserves the exact world anchor in both axes',()=>{
   assert.equal((200-c.x)*c.zoom,(200-city.x)*city.zoom);assert.equal((200-c.y)*c.zoom,(200-city.y)*city.zoom);
 });
 test('zoom is bounded and ignores malformed factors or anchors',()=>{
-  assert.equal(zoomAt(city,10000).zoom,24);assert.equal(zoomAt(city,.0001).zoom,.4);
+  assert.equal(zoomAt(city,10000).zoom,96);assert.equal(zoomAt(city,.0001).zoom,.4);
   assert.deepEqual(zoomAt(city,NaN),city);assert.deepEqual(zoomAt(city,0),city);
   assert.deepEqual(zoomAt(city,2,{x:NaN,y:Infinity}),{...city,zoom:2});
   assert.deepEqual(zoomAt({x:NaN,y:Infinity,zoom:NaN},2),{...city,zoom:2});
@@ -57,7 +57,7 @@ test('fit camera contains the complete projected Houston bounds in wide, short a
 test('fit camera respects zero padding, max zoom, and malformed-input fallback',()=>{
   const bounds={x:0,y:0,width:800,height:630};
   assert.deepEqual(fitMapCamera(bounds,800,630,{padding:0}),city);
-  assert.equal(fitMapCamera({x:10,y:20,width:1,height:1},800,630).zoom,24);
+  assert.equal(fitMapCamera({x:10,y:20,width:1,height:1},800,630).zoom,96);
   for(const [box,width,height,insets]of [
     [null,800,630,{}],[{...bounds,width:0},800,630,{}],
     [{...bounds,x:NaN},800,630,{}],[bounds,0,630,{}],[bounds,800,Infinity,{}],
@@ -102,5 +102,6 @@ test('manual resize retains the world center and screen scale within the new zoo
   assert.deepEqual(resized,{x:211,y:764,zoom:3});
   assert.deepEqual(resizeMapCamera(resized,800,1200,.4),start);
   assert.equal(resizeMapCamera({...start,zoom:.2},800,2400,.15).zoom,.15);
-  assert.equal(resizeMapCamera({...start,zoom:20},1200,600,.4).zoom,24);
+  assert.equal(resizeMapCamera({...start,zoom:20},1200,600,.4).zoom,40);
+  assert.equal(resizeMapCamera({...start,zoom:80},1200,600,.4).zoom,96);
 });

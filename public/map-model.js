@@ -158,10 +158,11 @@ export function cameraView(camera, width, height) {
   const w=800/camera.zoom,h=w*height/Math.max(1,width);
   return {x:camera.x-w/2,y:camera.y-h/2,width:w,height:h};
 }
-const minimumZoom=value=>Number.isFinite(value)&&value>0?Math.min(24,Math.max(.01,value)):.4;
+export const MAX_MAP_ZOOM=96;
+const minimumZoom=value=>Number.isFinite(value)&&value>0?Math.min(MAX_MAP_ZOOM,Math.max(.01,value)):.4;
 // The screen scale is proportional to viewport width times zoom.
 export function resizeMapCamera(camera,previousWidth,width,minZoom){
-  const zoom=Math.min(24,Math.max(minimumZoom(minZoom),camera.zoom*previousWidth/width));
+  const zoom=Math.min(MAX_MAP_ZOOM,Math.max(minimumZoom(minZoom),camera.zoom*previousWidth/width));
   return {...camera,zoom};
 }
 export function fitMapCamera(bounds,width,height,insets={}) {
@@ -179,7 +180,7 @@ export function fitMapCamera(bounds,width,height,insets={}) {
   const usableHeight=height-edges.top-edges.bottom-2*edges.padding;
   if(usableWidth<=0||usableHeight<=0)return fallback();
   const scale=Math.min(usableWidth/bounds.width,usableHeight/bounds.height);
-  const zoom=Math.min(24,Math.max(.01,scale*800/width));
+  const zoom=Math.min(MAX_MAP_ZOOM,Math.max(.01,scale*800/width));
   const unit=800/width/zoom;
   const x=bounds.x+bounds.width/2-(edges.left-edges.right)/2*unit;
   const y=bounds.y+bounds.height/2-(edges.top-edges.bottom)/2*unit;
@@ -195,10 +196,10 @@ export function boundCameraToExtent(camera,bounds,width,height) {
 export function zoomAt(camera, factor, point={x:camera.x,y:camera.y},minZoom=.4) {
   const floor=minimumZoom(minZoom);
   const current={x:Number.isFinite(camera.x)?camera.x:400,y:Number.isFinite(camera.y)?camera.y:315,
-    zoom:Number.isFinite(camera.zoom)?Math.min(24,Math.max(floor,camera.zoom)):1};
+    zoom:Number.isFinite(camera.zoom)?Math.min(MAX_MAP_ZOOM,Math.max(floor,camera.zoom)):1};
   if(!Number.isFinite(factor)||factor<=0)return current;
   if(!point||!Number.isFinite(point.x)||!Number.isFinite(point.y))point=current;
-  const zoom=Math.min(24,Math.max(floor,current.zoom*factor));
+  const zoom=Math.min(MAX_MAP_ZOOM,Math.max(floor,current.zoom*factor));
   return {zoom,x:point.x-(point.x-current.x)*current.zoom/zoom,y:point.y-(point.y-current.y)*current.zoom/zoom};
 }
 export function startGesture(camera, points, worldPoint, unit,minZoom=.4) {

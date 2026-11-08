@@ -1,9 +1,10 @@
 import {node,button,svgNode,icon,iconButton,title,count} from './ui.js';
-import {geometryOf,geometryBounds,demoLocations,buildSubtiles,detailLevel,cameraView,zoomAt as boundedZoom,fitMapCamera,resizeMapCamera,startGesture,moveGesture,hospitalityFixture,hospitalityForRegion,searchMapRecords,boundCameraToExtent,NEED_TYPES} from './map-model.js';
+import {geometryOf,geometryBounds,demoLocations,buildSubtiles,detailLevel,cameraView,zoomAt as boundedZoom,fitMapCamera,resizeMapCamera,startGesture,moveGesture,hospitalityFixture,hospitalityForRegion,searchMapRecords,boundCameraToExtent,NEED_TYPES,MAX_MAP_ZOOM} from './map-model.js';
 import {createReferenceLayer} from './reference-layer.js';
 import {createImageryDetailLayer} from './imagery-layer.js';
 import {createHistoricalLayer} from './historical-layer.js';
 const $=s=>document.querySelector(s);
+const ASSISTANCE_SCALE_MAX=300;
 const root=$('#houston-content'),status=$('#houston-status'),frame=$('#map-view');
 let data,svg,project,unproject,paths=new Map(),cells=new Map(),pois=[],mapSize={width:1000,height:700};
 let activePoiId=null,cameraFitted=true,referenceLayer=null,detailImagery=null,historicalLayer=null;
@@ -63,7 +64,7 @@ function historicalStatus(state){
   const scene=state.scene;
   if(scene){
     const percentage=Number.isFinite(scene.validFraction)?`${Math.round(scene.validFraction*100)}% of the mapped Houston extent has clear observations. `:'';
-    $('#historical-note').textContent=state.mode==='water'?`${percentage}Green B03 + SWIR B11, analyzed at 20 m. Cyan emphasizes open-water signal, including permanent water. Dots mark clouds, shadows or missing observations. This is not a verified flood boundary.`:state.mode==='event-rgb'?`${percentage}Same-date Sentinel-2 true color. Dots mark unavailable observations; reference imagery underneath supplies orientation.`:state.mode==='radar'?'NASA/JPL probable inundation from Sentinel-1 radar, August 5–29, 2017. Blue marks proxy indications; unmarked areas are unknown. Reliability is lower in urban areas.':'NOAA flood-date aerial imagery. Dots mark missing flight coverage; reference imagery underneath is context, not evidence of dry ground.';
+    $('#historical-note').textContent=state.mode==='water'?`${percentage}Green B03 + SWIR B11, analyzed at 20 m. Cyan emphasizes open water, including rivers and lakes; it does not isolate newly flooded ground. Floodwater mixed with buildings or vegetation can be missed. Dimmed context marks clouds, shadows or missing observations. Use Show flooding for dated street imagery.`:state.mode==='event-rgb'?`${percentage}Same-date Sentinel-2 true color. Dimmed context marks unavailable observations; reference imagery underneath supplies orientation.`:state.mode==='radar'?'NASA/JPL probable inundation from Sentinel-1 radar, August 5–29, 2017. Blue marks proxy indications; unmarked areas are unknown. Reliability is lower in urban areas.':'NOAA flood-date aerial imagery. Dimmed context marks missing flight coverage; reference imagery underneath is context, not evidence of dry ground.';
     $('#map-source').textContent=state.outsideCapture?'Outside the selected capture · reference imagery is context':state.mode==='flood'?`NOAA NGS · ${scene.date} · partial flight coverage · Harvey 2017`:state.mode==='radar'?'NASA/JPL ARIA · Sentinel-1 radar · August 29, 2017 · 30 m flood proxy':`Copernicus Sentinel-2 · ${scene.date} · ${state.mode==='water'?'B03 / B11 water emphasis':'true color'} · 20 m`;
   }
   $('#imagery-detail-status').textContent=state.kind==='loading'?'Loading dated imagery…':state.kind==='unavailable'?'This historical image could not load. Use Retry or choose another capture.':state.label;
@@ -91,15 +92,15 @@ function focusHistoricalExample(index=0){
 function applyImageryMode(mode){
   const previousMode=imageryMode;
   if(['water','event-rgb'].includes(mode)&&['water','event-rgb'].includes(previousMode))captureDates[mode]=captureDates[previousMode];
-  if(mode==='flood'&&['water','event-rgb'].includes(previousMode)&&historicalLayer?.dates('flood').some(item=>item.value===captureDates[previousMode]))captureDates.flood=captureDates[previousMode];
+  if(['water','event-rgb'].includes(mode)&&previousMode==='flood'&&historicalLayer?.dates(mode).some(item=>item.value===captureDates.flood)){captureDates.water=captureDates.flood;captureDates['event-rgb']=captureDates.flood;}
   imageryMode=mode;$('#basemap-select').value=mode;
   if(imagery)imagery.style.display=mode==='boundaries'?'none':'';
-  detailImagery?.setEnabled(mode==='aerial');historicalLayer?.setMode(mode,captureDates[mode]);historicalLayer?.element.setAttribute('opacity',Number($('#aerial-opacity').value)/100);
+  detailImagery?.setEnabled(mode!=='boundaries');historicalLayer?.setMode(mode,captureDates[mode]);historicalLayer?.element.setAttribute('opacity',Number($('#aerial-opacity').value)/100);
   $('#imagery-provenance').textContent=mode==='water'||mode==='event-rgb'?'Contains modified Copernicus Sentinel data (2017). Same-date scenes; clouds and shadows are masked.':mode==='flood'?'NOAA NGS aerial photographs acquired during the Harvey response, August–September 2017.':mode==='radar'?'NASA/JPL ARIA flood proxy from Copernicus Sentinel-1 observations, August 2017.':mode==='boundaries'?'Official Houston boundaries. No imagery is shown.':'USGS / USDA 2017–2021 aerial detail with NASA 2004 regional context. Reference imagery does not establish flood conditions.';
   frame.classList.toggle('water-view',mode==='water');frame.classList.toggle('event-view',isHistorical(mode));
   refreshCaptureDates();$('#water-map-key').hidden=!['water','radar'].includes(mode);$('#historical-example').hidden=!isHistorical(mode);$('#capture-unknown-key').hidden=!isHistorical(mode);
   $('#water-map-key').classList.toggle('radar-key',mode==='radar');
-  $('#capture-unknown-key span').textContent=mode==='radar'?'Unmarked flood status is unknown':'Dots · no usable dated imagery';
+  $('#capture-unknown-key span').textContent=mode==='radar'?'Unmarked flood status is unknown':'Dimmed · no observation; flood status unknown';
   $('#water-key-text').textContent=mode==='radar'?'Blue · probable inundation proxy':'Cyan · stronger open-water signal';
   const examples=$('#historical-focuses');examples.replaceChildren();
   if(mode==='flood')for(const [i,asset]of (historicalLayer?.hotspots()||[]).entries())examples.append(button(`${asset.label} · ${asset.date.slice(5)}`,()=>focusHistoricalExample(i),'control'));
@@ -113,7 +114,8 @@ function historicalReady(controller){
   const available=controller.available;
   const retry=$('#history-retry');if(document.activeElement===retry||retry.dataset.restoreFocus==='true')$('#basemap-select').focus({preventScroll:true});delete retry.dataset.restoreFocus;retry.hidden=true;
   for(const option of $('#basemap-select').options){if(option.value==='water')option.disabled=!available.water;if(option.value==='event-rgb')option.disabled=!available.rgb;if(option.value==='flood')option.disabled=!available.flood;if(option.value==='radar')option.disabled=!available.radar;}
-  if(!historicalDefaultsApplied&&!imageryModeTouched&&available.water){imageryMode='water';if(!imageryOpacityTouched){$('#aerial-opacity').value='100';imagery?.setAttribute('opacity','1');}if(!overlayOpacityTouched)$('#tile-opacity').value='35';historicalDefaultsApplied=true;renderTiles();}
+  $('#show-flooding').disabled=!available.flood;
+  if(!historicalDefaultsApplied&&!imageryModeTouched&&(available.radar||available.water)){imageryMode=available.radar?'radar':'water';if(!imageryOpacityTouched){$('#aerial-opacity').value='100';imagery?.setAttribute('opacity','1');}if(!overlayOpacityTouched)$('#tile-opacity').value='35';historicalDefaultsApplied=true;renderTiles();}
   applyImageryMode(imageryMode);
 }
 function referenceStatus(state){
@@ -128,7 +130,7 @@ function setCamera(next,fitted=false){
   const coverage=data.contextBasemaps?.find(image=>image.available&&image.kind==='world');
   camera=coverage?boundCameraToExtent(next,rectangle(coverage.bbox),mapSize.width,mapSize.height):next;const v=cameraView(camera,mapSize.width,mapSize.height);
   svg.setAttribute('viewBox',`${v.x} ${v.y} ${v.width} ${v.height}`);
-  $('#map-zoom-in').disabled=camera.zoom>=24;$('#map-zoom-out').disabled=camera.zoom<=minimumCameraZoom()+1e-9;
+  $('#map-zoom-in').disabled=camera.zoom>=MAX_MAP_ZOOM;$('#map-zoom-out').disabled=camera.zoom<=minimumCameraZoom()+1e-9;
   const nextLevel=detailLevel(camera.zoom);
   if(level!==nextLevel){level=nextLevel;renderTiles();}
   for(const marker of poiLayer.children)marker.setAttribute('transform',`translate(${marker.dataset.x} ${marker.dataset.y}) scale(${800/mapSize.width/camera.zoom})`);
@@ -138,8 +140,8 @@ function setCamera(next,fitted=false){
     text.setAttribute('font-size',Number(text.dataset.size||10)*unit);
     text.style.strokeWidth=String(2.5*unit);text.style.letterSpacing=String(.45*unit)+'px';
   }
-  svg.querySelector('#unknown-hatch').setAttribute('patternTransform',`scale(${unit})`);svg.querySelector('#event-unknown-hatch').setAttribute('patternTransform',`scale(${unit})`);
-  if(imageryMode==='aerial')detailImagery?.update(v,mapSize);historicalLayer?.update(v,mapSize);updateMapResolution();
+  svg.querySelector('#unknown-hatch').setAttribute('patternTransform',`scale(${unit})`);
+  if(imageryMode!=='boundaries')detailImagery?.update(v,mapSize);historicalLayer?.update(v,mapSize);updateMapResolution();
   const controls=[],obstacles=[...poiLayer.children].map(marker=>({x:Number(marker.dataset.x)-19*unit,y:Number(marker.dataset.y)-19*unit,width:38*unit,height:38*unit}));
   for(const control of frame.querySelectorAll('.operations-panel,.imagery-panel,.map-top-controls,.map-legend-card,.map-resolution,.map-detail,.map-breadcrumb,.map-fit,.map-zoom-controls,.mobile-panel-toggle,.map-footer')){
     if(!control.getClientRects().length||getComputedStyle(control).visibility==='hidden')continue;
@@ -147,7 +149,6 @@ function setCamera(next,fitted=false){
     const box={x:a.x-4*unit,y:a.y-4*unit,width:end.x-a.x+8*unit,height:end.y-a.y+8*unit};obstacles.push(box);controls.push(box);
   }
   referenceLayer?.update(v,unit,obstacles);declutterLabels(unit,controls);
-  $('#legend-resolution').textContent=['Areas','Subtiles','Subtiles'][level];
 }
 function stopAnimation(){if(animationFrame)cancelAnimationFrame(animationFrame);animationFrame=0;}
 function animateCamera(target){stopAnimation();if(window.matchMedia('(prefers-reduced-motion:reduce)').matches){setCamera(target);return;}const start={...camera},at=performance.now();const tick=now=>{const t=Math.min(1,(now-at)/220),ease=1-(1-t)**3;setCamera({x:start.x+(target.x-start.x)*ease,y:start.y+(target.y-start.y)*ease,zoom:start.zoom+(target.zoom-start.zoom)*ease});if(t<1)animationFrame=requestAnimationFrame(tick);else animationFrame=0;};animationFrame=requestAnimationFrame(tick);}
@@ -207,9 +208,9 @@ function bindArea(el,region,cell=null){
 }
 function renderTiles(){
   if(!paintLayer)return;const focused=document.activeElement?.closest('[data-region-id]')?.dataset;tooltip.hidden=true;paintLayer.replaceChildren();paths.clear();
-  const all=data.regions.flatMap(r=>level?cells.get(`${r.id}:${level}`):[areaData(r)]),max=Math.max(0,...all.map(metric));
+  const max=ASSISTANCE_SCALE_MAX;
   const fill=item=>layer==='hospitality'?(item.hospitality.score==null?'url(#unknown-hatch)':'#75abff'):(metric(item)?'#ff747b':'url(#unknown-hatch)');
-  const opacity=item=>layer==='hospitality'?(item.hospitality.score==null ? .55*alpha() : item.hospitality.score/100*alpha()):(metric(item)?metric(item)/Math.max(1,max)*alpha():.55*alpha());
+  const opacity=item=>layer==='hospitality'?(item.hospitality.score==null ? .55*alpha() : item.hospitality.score/100*alpha()):(metric(item)?Math.min(1,metric(item)/max)*alpha():.55*alpha());
   for(const region of data.regions){
     const outline=svgNode('path',{d:path(region.geometry),fill:level?'transparent':fill(areaData(region)),'fill-opacity':level?0:opacity(areaData(region)),'fill-rule':'evenodd',stroke:'#c7d7eb','stroke-opacity':.25,'stroke-width':level ? .6 : .9,'vector-effect':'non-scaling-stroke',class:'map-region'});
     if(!level){bindArea(outline,region);paintLayer.append(outline);}else{
@@ -217,7 +218,7 @@ function renderTiles(){
     }paths.set(region.id,outline);
   }
   reconcileAreas();if(focused){const replacement=[...paintLayer.querySelectorAll('[data-region-id]')].find(e=>e.dataset.regionId===focused.regionId&&e.dataset.cellId===focused.cellId);(replacement||svg).focus({preventScroll:true});}
-  $('#legend-maximum').textContent=layer==='hospitality'?'100% suitability':`${count(max)} requests`;$('#legend-title').textContent=layer==='hospitality'?'Hospitality suitability':filter==='all'?'Open assistance requests':`${title(filter)} requests`;$('#legend-ramp').classList.toggle('blue',layer==='hospitality');$('#legend-unknown').textContent=layer==='hospitality'?'Hatched · suitability unknown':filter==='all'?'No reports · coverage unknown':`No ${filter} reports · coverage unknown`;
+  $('#legend-maximum').textContent=layer==='hospitality'?'100% suitability':`${count(ASSISTANCE_SCALE_MAX)} requests`;$('#legend-title').textContent=layer==='hospitality'?'Hospitality suitability':filter==='all'?'Open assistance requests':`${title(filter)} requests`;$('#legend-ramp').classList.toggle('blue',layer==='hospitality');$('#legend-unknown').textContent=layer==='hospitality'?'Hatched · suitability unknown':filter==='all'?'No reports · coverage unknown':`No ${filter} reports · coverage unknown`;
 }
 function renderMetrics(){
   const metrics=$('#map-metrics');metrics.replaceChildren();for(const [value,label,tone] of [[data.stats.openRequests,'Open requests',''],[data.stats.coverageChecks,'Coverage checks',''],[data.stats.urgentRequests,'Urgent cases','metric-alert']]){const e=node('div',tone);e.append(node('strong','',count(value)),node('small','',label));metrics.append(e);}$('#coverage-count').textContent=data.stats.coverageChecks;document.querySelector('.operations-heading p').textContent=`${data.regions.length} coverage areas · Houston city limits`;
@@ -295,7 +296,6 @@ function initializeMap(){
   unproject=([x,y])=>[west+(x-(800-width)/2)/(cos*scale),north-(y-(630-height)/2)/scale];
   svg=svgNode('svg',{class:'map-canvas',role:'group',tabindex:0,'aria-label':'Houston interactive response map. Drag to pan; scroll or pinch to zoom. Plus and minus zoom; arrows pan; zero fits Houston. Enter opens a focused area.'});
   const defs=svgNode('defs'),clip=svgNode('clipPath',{id:'city-clip'});clip.append(svgNode('path',{d:path(data.city.boundary),'clip-rule':'evenodd','fill-rule':'evenodd'}));defs.append(clip);
-  const eventPattern=svgNode('pattern',{id:'event-unknown-hatch',width:12,height:12,patternUnits:'userSpaceOnUse'});eventPattern.append(svgNode('circle',{cx:3,cy:3,r:.9,fill:'#a8b9cb'}));defs.append(eventPattern);
   const pattern=svgNode('pattern',{id:'unknown-hatch',width:7,height:7,patternUnits:'userSpaceOnUse'});pattern.append(svgNode('path',{d:'M-1 1L1-1M0 7L7 0M6 8L8 6',stroke:'#adbacb','stroke-width':.45,opacity:.5}));defs.append(pattern);
   for(const r of data.regions){const regionClip=svgNode('clipPath',{id:`clip-${r.id}`});regionClip.append(svgNode('path',{d:path(r.geometry),'clip-rule':'evenodd','fill-rule':'evenodd'}));defs.append(regionClip);cells.set(`${r.id}:0`,hospitalityForRegion(r,0));const placed=demoLocations(r);for(const l of [1,2])cells.set(`${r.id}:${l}`,buildSubtiles(r,l,placed));}svg.append(defs);
   // Context imagery is not clipped to Houston; only the request/selection overlays are.
@@ -321,7 +321,7 @@ function initializeMap(){
     $('#imagery-provenance').textContent='Historical imagery unavailable. Showing verified Houston boundaries only.';
   }
   detailImagery=createImageryDetailLayer({pyramid:data.imageryPyramid,project,unproject,onStatus:reportImagery,isActive:()=>!frame.hidden&&!document.hidden});
-  imagery?.append(detailImagery.element);detailImagery.setEnabled(imageryMode==='aerial');
+  imagery?.append(detailImagery.element);detailImagery.setEnabled(imageryMode!=='boundaries');
   historicalLayer=createHistoricalLayer({project,unproject,onReady:historicalReady,onStatus:historicalStatus});land.append(historicalLayer.element);
   paintLayer=svgNode('g',{'clip-path':'url(#city-clip)'});poiLayer=svgNode('g',{'aria-label':'Fictional facilities'});svg.append(land,paintLayer,svgNode('path',{d:path(data.city.boundary),fill:'none',stroke:'#b1c5de','stroke-opacity':.45,'stroke-width':1,'vector-effect':'non-scaling-stroke','fill-rule':'evenodd','pointer-events':'none'}));
   const labels=svgNode('g',{'aria-hidden':'true'});for(const [i,r]of data.regions.entries())if(r.labelPoint&&(i<3||i%9===0)){const [x,y]=project(r.labelPoint),t=svgNode('text',{x,y,class:'map-place-name',fill:'#dbe6f6',stroke:'#0d1119','font-size':5,'text-anchor':'middle'});t.dataset.size='9';t.dataset.rank=String(i<3?i+1:100+i);t.textContent=r.name.toUpperCase();labels.append(t);}const [hx,hy]=project([-95.3698,29.7604]),cityLabel=svgNode('text',{x:hx,y:hy,class:'map-place-name',fill:'#e7edf5',stroke:'#0d1119','font-size':10,'font-weight':600,'text-anchor':'middle'});cityLabel.dataset.size='15';cityLabel.dataset.rank='0';cityLabel.textContent='HOUSTON';labels.append(cityLabel);referenceLayer=createReferenceLayer({project,onStatus:referenceStatus,onReady:()=>{if(svg){renderQueue();setCamera(camera,cameraFitted);}}});
@@ -396,5 +396,13 @@ for(const id of ['imagery-toggle','mobile-panel-toggle','desktop-panel-close'])$
 
 $('#capture-date').addEventListener('change',e=>{captureDates[imageryMode]=e.target.value;if(['water','event-rgb'].includes(imageryMode)){captureDates.water=e.target.value;captureDates['event-rgb']=e.target.value;}historicalLayer?.setDate(e.target.value);if(svg)setCamera(camera,cameraFitted);});
 $('#historical-example').addEventListener('click',()=>focusHistoricalExample(0));
+$('#show-flooding').addEventListener('click',()=>{
+  const examples=historicalLayer?.hotspots()||[],index=examples.findIndex(asset=>asset.id==='harvey-20170830-barker');
+  if(index<0)return;
+  imageryModeTouched=true;imageryOpacityTouched=true;captureDates.flood=examples[index].date;
+  $('#aerial-opacity').value='100';applyImageryMode('flood');focusHistoricalExample(index);
+  // Open a real flooded neighborhood, rather than a citywide image dominated by missing coverage.
+  focusBounds([-95.72,29.74472,-95.69548,29.76780]);
+});
 
 $('#history-retry').addEventListener('click',()=>historicalLayer?.load(true));

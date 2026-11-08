@@ -203,7 +203,6 @@ html{scroll-behavior:auto}body{font-family:-apple-system,BlinkMacSystemFont,'Hel
  .map-top-controls #houston-scenario{position:absolute;top:52px;right:0;width:145px;max-width:none;font-size:12px}
  .map-resolution{top:114px}
  .map-breadcrumb,.map-workspace.overview-collapsed .map-breadcrumb{top:70px;max-width:calc(100% - 174px)}
- .map-workspace.panel-open #houston-scenario{visibility:hidden}
  .imagery-panel{top:62px}
 }
 
@@ -520,3 +519,36 @@ input[type=checkbox],input[type=range]{accent-color:var(--blue)}
 .water-map-key.radar-key i{background:#64c8ff}
 .capture-unknown-key{display:flex;align-items:flex-start;gap:7px;margin-bottom:10px;font-size:9px;line-height:1.5;color:var(--muted)}
 .capture-unknown-key i{height:11px;width:11px;flex:none;border:1px solid var(--line);background:radial-gradient(circle,#adbacb 1px,transparent 1.4px) 0 0/4px 4px}
+
+/* Archived study pairs: comparison waits for both real images. */
+.archive-toolbar{flex-wrap:wrap;align-items:center;gap:12px 16px;margin-bottom:12px}
+.archive-toolbar label{flex:1 1 260px;min-width:0;max-width:500px}
+.archive-toolbar select{width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.archive-toolbar .pill{max-width:100%;white-space:normal;line-height:1.6}
+.archive-status{max-width:750px;margin:0 auto 14px;min-height:1.8em;line-height:1.8;overflow-wrap:anywhere}
+.archive-actions{max-width:750px;margin:16px auto;display:flex;flex-wrap:wrap;gap:10px}
+.archive-actions .control{min-height:44px}
+.archive-actions [aria-disabled=true]{color:var(--muted);cursor:progress}
+.archive-pair.is-loading,.archive-pair.is-error{cursor:default;aspect-ratio:auto!important;min-height:180px;display:grid;place-items:center}
+.archive-pair .archive-feedback{padding:32px 22px}
+.archive-empty .archive-feedback{border:1px solid var(--line);border-radius:10px;background:var(--surface-soft);max-width:750px;margin:0 auto}
+.archive-slider input:disabled{opacity:.45;cursor:default}
+.archive-pair.is-ready img{user-select:none;-webkit-user-drag:none}
+@media(max-width:760px){.archive-toolbar{display:flex}.archive-toolbar label{flex-basis:100%;max-width:none}.archive-status{font-size:11px}.archive-actions .control{flex:1 1 auto}.archive-pair.is-loading,.archive-pair.is-error{min-height:150px}}
+
+/* The flood shortcut keeps a separate touch row on compact maps. */
+@media(max-width:760px),(max-height:520px){
+ .map-top-controls #show-flooding{position:absolute;right:0;top:52px;min-width:112px}
+ .map-resolution{top:116px;right:12px;max-width:210px}
+ .map-breadcrumb,.map-workspace.overview-collapsed .map-breadcrumb{top:66px;left:12px;right:auto;max-width:calc(100% - 160px)}
+}
+@media(max-width:420px){
+ .map-resolution{top:116px;right:12px;max-width:calc(100% - 24px)}
+ .map-breadcrumb,.map-workspace.overview-collapsed .map-breadcrumb{top:70px;max-width:calc(100% - 174px)}
+}
+
+.map-top-controls #show-flooding{white-space:nowrap}
+.scenario-select{margin-top:8px}
+
+/* Observation gaps stay quiet at street scale; the key identifies dimmed context. */
+.capture-unknown-key i{background:#263342;border-color:#617082}

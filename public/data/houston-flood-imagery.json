@@ -134,6 +134,43 @@
           "sourceDigest": "b8a4bb1afb4c6d249da6eb92d3ef765413df0b1df458921a62efb4d867ac41f4",
           "warpErrorOutputPixelsBound": 2.3834125953829136e-05,
           "retrievedAt": "2026-11-08T06:36:21.404601+00:00"
+        },
+        {
+          "id": "harvey-20170830-baker-road-fine",
+          "label": "Barker / Baker Road · 0.5 m detail",
+          "date": "2017-08-30",
+          "bbox": [
+            -95.72,
+            29.74472,
+            -95.69548,
+            29.7678
+          ],
+          "crs": "EPSG:4326",
+          "file": "harvey-20170830-baker-road-fine.webp",
+          "path": "/data/flood-imagery/harvey-20170830-baker-road-fine.webp",
+          "width": 4571,
+          "height": 4956,
+          "sourceCacheLevel": 18,
+          "sourceLayers": [
+            "20170830-rgb"
+          ],
+          "role": "detail",
+          "available": true,
+          "bytes": 2084370,
+          "sha256": "2c83424aa89400522eca8104d7b745b328b0206823100930f6aefbc2d8a50015",
+          "coverageFraction": 1.0,
+          "sourceMetersPerPixel": 0.5184249443580983,
+          "sourceTileRange": {
+            "columnMin": 61370,
+            "columnMax": 61388,
+            "rowMin": 108349,
+            "rowMax": 108368
+          },
+          "sourceTileCount": 380,
+          "nonemptySourceTileCount": 380,
+          "sourceDigest": "7648219deb5d8a16f6a1241026beaa1129e90b5c7c524c8a166bb3d81170238d",
+          "warpErrorOutputPixelsBound": 5.951918755642504e-06,
+          "retrievedAt": "2026-11-08T07:09:23.556272+00:00"
         }
       ],
       "coverageNote": "Partial NOAA flight coverage; transparent gaps are unavailable historical imagery, not evidence of dry ground."
@@ -258,6 +295,43 @@
           "sourceDigest": "4ddec7233d272639b3864fa0e722fe7984182fccc6c5352834db18b97ded0003",
           "warpErrorOutputPixelsBound": 2.3947571836157368e-05,
           "retrievedAt": "2026-11-08T06:36:25.436908+00:00"
+        },
+        {
+          "id": "harvey-20170831-kingwood-fine",
+          "label": "Kingwood / West Fork · 0.5 m detail",
+          "date": "2017-08-31",
+          "bbox": [
+            -95.22,
+            30.0,
+            -95.195,
+            30.023
+          ],
+          "crs": "EPSG:4326",
+          "file": "harvey-20170831-kingwood-fine.webp",
+          "path": "/data/flood-imagery/harvey-20170831-kingwood-fine.webp",
+          "width": 4660,
+          "height": 4951,
+          "sourceCacheLevel": 18,
+          "sourceLayers": [
+            "20170831a-rgb"
+          ],
+          "role": "detail",
+          "available": true,
+          "bytes": 2179714,
+          "sha256": "e29876742309b9bb6400d9b4043050cb80c96eabb6d307303196b5bd62429f98",
+          "coverageFraction": 1.0,
+          "sourceMetersPerPixel": 0.5170995000311753,
+          "sourceTileRange": {
+            "columnMin": 61734,
+            "columnMax": 61753,
+            "rowMin": 108134,
+            "rowMax": 108154
+          },
+          "sourceTileCount": 420,
+          "nonemptySourceTileCount": 420,
+          "sourceDigest": "5cfe36c8d7ea106b9e532bc0b4badcf840925944eb3e7f4b8618b657fa69f69e",
+          "warpErrorOutputPixelsBound": 5.998806322041455e-06,
+          "retrievedAt": "2026-11-08T07:09:25.995594+00:00"
         }
       ],
       "coverageNote": "Partial NOAA flight coverage; transparent gaps are unavailable historical imagery, not evidence of dry ground."
@@ -420,7 +494,7 @@
     ],
     "product": "Directly georeferenced emergency-response RGB mosaics; not a cadastral or navigation survey",
     "nativeProductGroundSampleDistanceMetersApprox": 0.5,
-    "nativeResolutionNote": "NOAA viewer reports approximately 50cm at zoom18. This bounded cache uses coarser zoom12 overview and zoom16 detail, with actual cached resolution recorded per image.",
+    "nativeResolutionNote": "NOAA viewer reports approximately 50cm at zoom18. This bounded cache uses zoom12 overviews, zoom16 area detail, and two small zoom18 native-detail crops; actual cached resolution is recorded per image.",
     "termsUrl": "https://www.fisheries.noaa.gov/inport/item/59048",
     "license": "CC0-1.0",
     "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
@@ -434,7 +508,8 @@
     "encoding": "WebP quality 85; original source alpha/no-data retained. NOAA all-transparent1px no-data responses are interpreted as empty256px source grid cells.",
     "sameDayMosaicOrder": "2017-08-31 Flight1 then Flight2, with Flight2 only where source alpha has real imagery.",
     "script": "scripts/prepare_houston_flood_imagery.py",
-    "runtime": "All image files are local; no runtime source requests."
+    "runtime": "All image files are local; no runtime source requests.",
+    "fineDetail": "Two bounded EPSG4326 zoom18 crops cache NOAA native approximately50cm imagery at Barker/Baker Road (August30) and Kingwood/West Fork (August31). No upscaling from the zoom16 cache."
   },
   "limitations": [
     "Flight-strip coverage is nonuniform. Transparent pixels mean imagery unavailable, never an inferred flood or dry-land state.",
@@ -443,5 +518,5 @@
     "Geographic context only. These images do not establish assistance need, hospitality suitability, welfare, facility operation, or safe travel.",
     "The separate xBD classifier study pairs have no verified Houston placement and are not used here."
   ],
-  "preparedAt": "2026-11-08T06:36:25.436980+00:00"
+  "preparedAt": "2026-11-08T07:09:25.996297+00:00"
 }

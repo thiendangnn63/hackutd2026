@@ -30,6 +30,6 @@ test('transition from pinch to drag rebases without jumping and cannot be a tap'
 test('zoom bounds hold during an extreme pinch without nonfinite coordinates',()=>{
   const g=startGesture(camera,[{x:399,y:300},{x:401,y:300}],world,.5);
   const next=moveGesture(g,[{x:-100000,y:300},{x:100000,y:300}]);
-  assert.equal(next.zoom,24);assert.ok(Number.isFinite(next.x)&&Number.isFinite(next.y));
+  assert.equal(next.zoom,96);assert.ok(Number.isFinite(next.x)&&Number.isFinite(next.y));
   assert.equal(zoomAt(camera,.000001).zoom,.4);
 });
