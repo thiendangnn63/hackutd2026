@@ -1,6 +1,6 @@
 # Demo API contract
 
-All data is fictional; the HTTP server binds only to 127.0.0.1. JSON errors use `{error: message}`. All successful mutations return the full state plus action metadata (`caseId`, `duplicate`). Browser UI fetches GET /api/state initially then uses state in mutation responses.
+All family reports and Houston requests are fictional; the geographic context and optional historical satellite model are real and separately attributed. The HTTP server binds only to 127.0.0.1. JSON errors use `{error: message}`. All successful family mutations return the full state plus action metadata (`caseId`, `duplicate`). Browser UI fetches GET /api/state initially then uses state in mutation responses.
 
 State:
 - `mode: 'simulation'`, `scenarioTime` ISO timestamp, `incident: {id,name,active,tiles:['A1','A2','B1','B2'],policy:{maxTiles:2,locationMaxAgeMinutes:120,maxRecipients:20}}`
@@ -28,3 +28,15 @@ This is a separate historical imagery panel. It never mutates family case state.
 - GET /api/satellite: availability, model provenance, held-out metrics, attribution, demo tile pairs and building predictions. Building estimates use only model damage_class/probabilities; reference_label is intentionally stripped. Before import: available=false, no fabricated tiles/predictions.
 - GET /api/satellite/images/:filename: PNG from the imported tile-pair allowlist only. No arbitrary file paths.
 - POST /api/satellite/infer `{tileId,buildingId}`: real local CPU inference for one existing bundled crop. Requires successful checkpoint validation, same-origin request, unchanged model checksum, and at most one in-flight request. No shell command interpolation. Returns prediction with source=local_model_inference, estimated state, uncalibrated probabilities, duration and model hash. Cached outputs are source=cached_model_output.
+
+## Houston mayor dashboard
+
+Read-only and independent of persisted family state. Requests are generated fictional fixtures, not live SMS or model output.
+
+- GET /api/houston?city=houston&scenario=normal: city boundary and bbox, attributed geography, local historical aerial basemap metadata, 89 region geometries, open counts, category counts, normalized intensities, review queue, individual urgent requests, unlocated requests, and stats. `scenario=empty` provides no-report coverage checks for every region. Other cities, scenarios, or query keys return 400.
+- GET /data/houston-imagery.jpg: fixed local historical aerial asset. There is no arbitrary file or URL access.
+- Missing or invalid geographic assets return `available:false` with a reason. Missing imagery keeps valid boundaries and requests available, while `basemap.available:false` and the UI make the absence explicit.
+
+Region result: `{id,name,labelPoint,geometry,openCount,intensity,categories:{medical,evacuation,supplies,other},priority,coverageStatus}`. `intensity=openCount/maxOpenCount`, or zero when no open requests exist. `coverageStatus` is `reported` or `unknown`, never safe. Category counts may overlap; request total counts each current open ID once. Latest valid version wins across city/status changes; resolved wins equal-time ties. Outside-Houston current records are excluded. Unknown region IDs remain visible in `unlocatedRequests` and total open requests, but not map counts.
+
+Review queue orders reported demand medical → evacuation → supplies → other and reserves a coverage-check slot after each group of three reported areas. The interface gives no-report areas their own persistent coverage lane. This is a human-review demo preference, not medical triage, allocation, or dispatch. No HTTP mutation endpoints exist for these fixtures.

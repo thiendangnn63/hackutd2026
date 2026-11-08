@@ -5,9 +5,10 @@ import { resolve, dirname } from 'node:path';
 import { InputError, openCase, sendOutreach, receiveReport, verifyCase, setConsent } from './domain.js';
 import { Store } from './store.js';
 import { SatelliteService } from './satellite.js';
+import { HoustonService } from './houston-service.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'] };
+const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/houston.js': ['houston.js', 'text/javascript'], '/houston.css': ['houston.css', 'text/css'], '/data/houston-imagery.jpg': ['data/houston-imagery.jpg', 'image/jpeg'] };
 async function body(req) {
   if (!String(req.headers['content-type'] || '').startsWith('application/json')) throw new InputError('Use application/json.', 415);
   let bytes = 0, data = '';
@@ -22,7 +23,7 @@ async function body(req) {
     return value;
   } catch { throw new InputError('Expected a JSON object.'); }
 }
-export function createApp(store = new Store(resolve(root, '.data/state.json')), satellite = new SatelliteService(root)) {
+export function createApp(store = new Store(resolve(root, '.data/state.json')), satellite = new SatelliteService(root), houston = new HoustonService(root)) {
   return createServer(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -37,6 +38,10 @@ export function createApp(store = new Store(resolve(root, '.data/state.json')), 
       const url = new URL(req.url, `http://${req.headers.host}`);
       if (req.method === 'GET' && url.pathname === '/api/state') return json(200, store.read());
       if (req.method === 'GET' && url.pathname === '/api/health') return json(200, { ok: true, mode: 'simulation', liveSendingEnabled: false });
+      if (req.method === 'GET' && url.pathname === '/api/houston') {
+        if ([...url.searchParams.keys()].some(key => !['scenario', 'city'].includes(key))) throw new InputError('Unsupported dashboard option.');
+        return json(200, houston.view({ scenario: url.searchParams.get('scenario') || 'normal', city: url.searchParams.get('city') || 'houston' }));
+      }
       if (req.method === 'GET' && url.pathname === '/api/satellite') return json(200, satellite.status());
       if (req.method === 'GET' && url.pathname.startsWith('/api/satellite/images/')) {
         const data = satellite.image(url.pathname.slice('/api/satellite/images/'.length));
@@ -57,7 +62,7 @@ export function createApp(store = new Store(resolve(root, '.data/state.json')), 
       if (req.method === 'GET' && files[url.pathname]) {
         const [filename, type] = files[url.pathname];
         const data = await readFile(resolve(root, 'public', filename));
-        res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8` }); res.end(data); return;
+        res.writeHead(200, { 'Content-Type': type.startsWith('image/') ? type : `${type}; charset=utf-8` }); res.end(data); return;
       }
       return json(404, { error: 'Not found.' });
     } catch (error) {

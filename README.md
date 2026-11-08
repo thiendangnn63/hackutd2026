@@ -34,7 +34,20 @@ npm test
 7. Stop the search after verification. The water task remains unassigned, and unanswered case **C104** remains open. A location, a welfare outcome, and a completed assistance task are different facts.
 8. Try a correction, an unknown location, duplicate event ID, `STOP`, and the simulated extraction-failure option. Raw reports remain reviewable. Reset returns only this local exercise to its original fictional fixtures.
 
-The scenario clock is fixed at **2026-11-07 14:30 UTC**. Observation and last-location times use that clock. Receipt/audit timestamps use the real machine clock. The UI map is schematic, not a geographic or emergency navigation map.
+The scenario clock is fixed at **2026-11-07 14:30 UTC**. Observation and last-location times use that clock. Receipt/audit timestamps use the real machine clock. The family exercise map is schematic, not a geographic or emergency navigation map.
+
+## Rehearse the Houston mayor dashboard
+
+Open **http://127.0.0.1:4173/#mayor**. This independent, read-only exercise uses real Houston geography and **fictional requests**, not live emergency data or the family exercise's reports.
+
+- Full-purpose Houston city limits only, including interior holes and outlying Houston areas. The 88 official Super Neighborhoods are clipped to the city; an explicit 89th coverage area retains remaining city land. Neighboring cities are excluded.
+- A local public-domain **historical USGS/USDA NAIP aerial image**, not live satellite or disaster imagery, is masked to the city. Source attribution and limitations appear beneath the map; see [geographic provenance](docs/HOUSTON_DATA.md).
+- Unique open requests set red opacity linearly: Willowbrook's 300 is 100%, Greater Greenspoint's 100 is 33.3%, and Carverdale's 2 is 0.7%. The side bar displays the numeric range. Multiple need categories do not duplicate the total request count.
+- Hover or focus a neighborhood for counts and categories; click or Enter to pin details, Escape to unpin. Reported needs are reviewed medical → evacuation → supplies → other. This is a demo human-review preference, not clinical triage or dispatch.
+- A separate coverage lane retains all 86 zero-report areas as **unknown**, not safe. The medical request in a quiet area remains visible as an individual urgent case. One unlocated request remains in human review, giving 403 total open requests versus 402 placed on the map.
+- Choose **No reports · coverage check** to verify the zero-maximum case: no red overlay, all 89 areas still queued, no division by zero. Switching scenarios never writes or resets the family exercise.
+
+The current dataset is a fixed demonstration, not live intake or location assignment. Source geography and historical imagery are bundled, so normal app operation makes no external map requests. Missing assets produce an explicit unavailable state rather than fabricated geography or imagery.
 
 ## Architecture
 
@@ -42,6 +55,8 @@ The scenario clock is fixed at **2026-11-07 14:30 UTC**. Observation and last-lo
 - `src/store.js`: atomic local JSON persistence. A failed action does not partially mutate the state. File writes are restricted to owner access.
 - `src/server.js`: local HTTP API and static app. Same-origin mutations, strict loopback Host validation, body limits, and restrictive browser security headers.
 - `src/satellite.js`: historical evidence and tightly scoped optional local inference, independent of family cases.
+- `src/houston.js` and `src/houston-service.js`: deduplicated open-request aggregation, coverage review, and the independent Houston fixture endpoint.
+- `public/data/` and `scripts/prepare_houston_geography.py`: attributed official geography, historical aerial image, and reproducible source preparation.
 - `scripts/import_model.py`: checksum-verified model import and local inference verification.
 - `training/`: reproducible from-scratch Kaggle training, local inference, and training tests.
 - `public/`: dependency-free responsive web UI.
@@ -53,11 +68,13 @@ The local data file `.data/state.json` and `.env` are ignored by Git. The app do
 
 ## What works versus what is pending
 
-**Implemented:** local case intake; stored reports; scoped dry-run recipient selection; simulated SMS inquiry/acknowledgment/family updates; source/time-linked observations; duplicate suppression; opt-out; officer evidence review; separate assistance state; restart persistence; reset; and a browser console. An optional historical satellite panel supports verified model bundles, cached predictions, and local inference when checkpoint verification passes.
+**Implemented:** local case intake; stored reports; scoped dry-run recipient selection; simulated SMS inquiry/acknowledgment/family updates; source/time-linked observations; duplicate suppression; opt-out; officer evidence review; separate assistance state; restart persistence; reset; and a browser console. The Houston-only mayor dashboard adds real geographic boundaries, historical aerial context, proportional fictional request counts, categories, and coverage/urgent review. An optional historical satellite panel supports verified model bundles, cached predictions, and local inference when checkpoint verification passes.
 
 **Simulated:** emergency alert, every SMS, model extraction, all people/locations, and the officer identity. The extraction parser recognizes scripted examples and conservatively routes other input to review. It is not suitable for real incoming reports.
 
 **Not integrated:** Photon provisioning or webhooks, real send/reply/delivery tests, Lightning/Nano Omni inference, arbitrary satellite or resident-photo uploads, real authentication/roles, secure photo uploads, retention policy, agency authorization, and production deployment. This milestone does not satisfy the live-SMS acceptance criterion yet. Satellite predictions are available only after a trusted trained bundle is imported locally.
+
+The Houston dashboard does not yet ingest real reports, geocode addresses, update request status, or assign outreach. It does not overlay the historical Harvey classifier results onto current Houston boundaries: the bundled model crops do not provide a verified geographic placement contract.
 
 ## Before any real integration
 
@@ -91,3 +108,7 @@ npm run import:model -- /absolute/path/utd_xbd_model.zip --sha256 VERIFIED_BUNDL
 The importer checks archive paths, per-file checksums, completed training, model contract, held-out predictions, probabilities, and crop bounds. It stores weights/images under git-ignored `.data/models/`, without changing the family exercise. The app never executes Python code from the archive. The importer loads the checkpoint through the repository's reviewed inference code with `torch.load(weights_only=True)` and compares a real local prediction with cached held-out output. Live inference remains disabled if this verification fails. The browser can run another local inference on a selected bundled crop, with a one-job limit and timeout.
 
 All results remain estimates. Scores are uncalibrated. The panel exposes held-out macro F1, per-class F1/support, and a majority baseline; do not conceal weak or absent-class results. Tile-disjoint data from a single event does not prove generalization. Reference labels are excluded from the displayed prediction contract. xBD imagery has CC BY-NC-SA 4.0 noncommercial/share-alike requirements; see training/README.md and bundle attribution.
+
+## Optional geography regression checks
+
+With the existing Python environment, install Shapely from the official PyPI registry if needed, then run `npm run test:geography`. These checks are network-free and verify the bundled city/region geometry, neighboring-city exclusions, and image extent. Shapely is a development check dependency only; the Node app does not need it.
