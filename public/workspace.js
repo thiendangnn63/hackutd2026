@@ -303,4 +303,9 @@ recordLayout.addEventListener('change',()=>{
   revealRecordFocus=true;renderPeople(false,peopleFocus);renderMessages(false,false,messageFocus);revealRecordFocus=false;
 });
 
+$('#person-search').addEventListener('keydown',event=>{
+  if(event.defaultPrevented||event.key!=='Enter'||event.isComposing||event.ctrlKey||event.metaKey||event.altKey||!$('#person-search').value.trim())return;
+  const selected=$('#people-workspace .person-row[aria-pressed="true"]');
+  if(selected){event.preventDefault();selected.click();}
+});
 $('#message-search').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.isComposing&&navigateMessageMatch(event.shiftKey?-1:1))event.preventDefault();});
