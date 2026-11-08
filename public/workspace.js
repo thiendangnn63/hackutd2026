@@ -42,10 +42,11 @@ function openConversation(caseId,messageId=null){
 }
 function openMessageLab(caseId){
   if(!caseId||caseId==='unassigned')return;
-  $('#sms-case').value=caseId;$('#sms-case').dispatchEvent(new Event('change'));
+  $('#sms-case').dispatchEvent(new CustomEvent('change',{detail:{caseId}}));
   location.hash='simulator';requestAnimationFrame(()=>$('#sms-form textarea').focus({preventScroll:true}));
 }
 function route(){
+  rememberProposalState($('#case-detail'));
   const hash=location.hash.slice(1)||'mayor',aliases={overview:'casework',family:'casework',simulator:'casework',assistance:'casework',satellite:'imagery'};
   const name=aliases[hash]||(['mayor','messages','people','casework','imagery'].includes(hash)?hash:'mayor');
   for(const [id,view]of [['map-view','mayor'],['messages-view','messages'],['people-view','people'],['casework-view','casework'],['imagery-view','imagery']]){

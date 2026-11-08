@@ -211,6 +211,38 @@ export function fitMapCamera(bounds,width,height,insets={}) {
   const y=bounds.y+bounds.height/2-(edges.top-edges.bottom)/2*unit;
   return [x,y,zoom].every(Number.isFinite)?{x,y,zoom}:fallback();
 }
+// Fit a requested geographic area into an actual free screen rectangle beside
+// a panel. Compact layouts may use either a right card or a bottom sheet.
+export function fitMapCameraWithPanel(bounds,width,height,panel,insets={}) {
+  const regular=()=>fitMapCamera(bounds,width,height,insets);
+  if(!bounds||!['x','y','width','height'].every(key=>Number.isFinite(bounds[key]))||bounds.width<=0||bounds.height<=0||
+    !Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0||!insets||typeof insets!=='object'||Array.isArray(insets)||
+    !panel||!['x','y','width','height'].every(key=>Number.isFinite(panel[key]))||panel.width<=0||panel.height<=0)return regular();
+  const edge={};
+  for(const key of ['left','right','top','bottom','padding']){
+    edge[key]=insets[key]??(key==='padding'?24:0);
+    if(!Number.isFinite(edge[key])||edge[key]<0)return regular();
+  }
+  const left=edge.left,right=width-edge.right,top=edge.top,bottom=height-edge.bottom;
+  if(right<=left||bottom<=top)return regular();
+  const gap=12,box={left:Math.max(left,panel.x-gap),right:Math.min(right,panel.x+panel.width+gap),
+    top:Math.max(top,panel.y-gap),bottom:Math.min(bottom,panel.y+panel.height+gap)};
+  if(box.right<=left||box.left>=right||box.bottom<=top||box.top>=bottom)return regular();
+  const candidates=[
+    {left,right:box.left,top,bottom},{left:box.right,right,top,bottom},
+    {left,right,top,bottom:box.top},{left,right,top:box.bottom,bottom}
+  ].filter(rect=>rect.right>rect.left&&rect.bottom>rect.top).map(rect=>{
+    const w=rect.right-rect.left,h=rect.bottom-rect.top;
+    // On unusually short windows prefer a smaller margin around the same
+    // real crop over the unrelated city-camera fallback.
+    const padding=Math.min(edge.padding,Math.max(0,(Math.min(w,h)-32)/2));
+    return {...rect,padding,scale:Math.min((w-padding*2)/bounds.width,(h-padding*2)/bounds.height),area:w*h};
+  }).sort((a,b)=>b.scale-a.scale||b.area-a.area);
+  const available=candidates[0];
+  if(!available)return regular();
+  return fitMapCamera(bounds,width,height,{left:available.left,right:width-available.right,
+    top:available.top,bottom:height-available.bottom,padding:available.padding});
+}
 // Geographic rasters have finite coverage; never repeat them beyond their real extent.
 export function boundCameraToExtent(camera,bounds,width,height) {
   if(!bounds||!['x','y','width','height'].every(key=>Number.isFinite(bounds[key]))||bounds.width<=0||bounds.height<=0)return camera;

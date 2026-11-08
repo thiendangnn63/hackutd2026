@@ -90,3 +90,12 @@ Casework preserves in-progress intake/message/verification fields, selected evid
 GET `/api/houston` includes top-level `facilities` and `fixturePlacement` metadata. Invalid explicit points remain unplaced instead of being clamped, rerandomized or replaced by region centroids. Missing/invalid preparation produces explicit location-review feedback while retaining real geometry and raw demand totals. Source imagery availability is checked independently from geographic context. The offline generator additionally validates every prepared point against actual opaque source pixels; see [covered planning locations](MAP_DEMO_PLACEMENTS.md).
 
 Area/facility details offer **View flood imagery** only when the exact associated NOAA asset/date is available. Clicking selects that capture, makes imagery visible and frames the fictional locations; background loading never moves the camera. Historical imagery establishes context, rather than real reports, shelter suitability or current operational status.
+
+
+## Per-case page drafts and responsive fixture focus
+
+Casework’s page-only draft store keys verification and message values by case ID. It prunes obsolete verification drafts after a recorded verification/removal and clears on this tab’s acknowledged Reset. Message drafts reserve unused demo provider IDs across unsent cases, while an existing draft/retry retains its exact ID. Native selector changes use the form’s outgoing case context to save the previous message before loading the requested case. Ordinary case review never changes that message context. No new evidence or durable case state is created by draft memory.
+
+Background rebuilds restore stable action/case-card focus and same-case field selection. A removed verification action falls back to its case heading. The shared state client still owns transport ordering; a successfully rendered SSE snapshot suppresses a later initial-GET error panel, and stream-constructor failure does not abort HTTP/control initialization. There is no new polling loop.
+
+Explicit fixture fitting considers actual detail-card geometry rather than treating every compact layout as a bottom sheet. Resizing reapplies that explicit fit until manual navigation cancels it; arbitrary free-pan views retain their center. The fit helper and short-portrait CSS change no source coordinates, request counts, imagery dates or backend contracts.

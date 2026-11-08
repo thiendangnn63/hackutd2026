@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {planningFacilities,fixtureImageryContext} from '../public/map-model.js';
+import {planningFacilities,fixtureImageryContext,fitMapCameraWithPanel,fitMapCamera,resizeMapCamera} from '../public/map-model.js';
 import {boundCameraToExtent,searchMapRecords,geometryBounds,insideGeometry,hasIntersection,demoLocations,buildSubtiles,hospitalityFixture,hospitalityForRegion,NEED_TYPES,detailLevel,cameraView,zoomAt,MAX_MAP_ZOOM} from '../public/map-model.js';
 import {HoustonService} from '../src/houston-service.js';
 const root=new URL('..',import.meta.url).pathname;
@@ -245,4 +245,69 @@ test('bundled covered fixtures preserve counts/categories inside exact assigned 
   const regions=features.map(feature=>({id:feature.properties.id,geometry:feature.geometry}));
   assert.equal(planningFacilities(regions,manifest.facilities).length,6);
   for(const facility of manifest.facilities){assert.ok(insideGeometry(facility.point,city));assert.equal(facility.fictional,true);assert.equal(facility.operational,false);}
+});
+
+const screenBounds=(camera,width,height,bounds)=>{
+  const view=cameraView(camera,width,height);
+  return {left:(bounds.x-view.x)/view.width*width,right:(bounds.x+bounds.width-view.x)/view.width*width,
+    top:(bounds.y-view.y)/view.height*height,bottom:(bounds.y+bounds.height-view.y)/view.height*height};
+};
+const clearOfPanel=(box,panel)=>box.right<=panel.x-12+1e-7||box.left>=panel.x+panel.width+12-1e-7||
+  box.bottom<=panel.y-12+1e-7||box.top>=panel.y+panel.height+12-1e-7;
+
+test('fixture fit uses the actual short-landscape right card instead of an impossible bottom inset',()=>{
+  // Browser reproduction: map at (64,48), card (476,106)-(776,348).
+  const bounds={x:250,y:375,width:3.27,height:3.77},panel={x:412,y:58,width:300,height:242};
+  assert.deepEqual(fitMapCamera(bounds,780,342,{bottom:296,padding:38}),{x:400,y:315,zoom:1});
+  const camera=fitMapCameraWithPanel(bounds,780,342,panel,{top:64,bottom:30,padding:38});
+  assert.ok(camera.zoom>1);assert.ok(camera.zoom<=MAX_MAP_ZOOM);
+  const screen=screenBounds(camera,780,342,bounds);
+  assert.ok(clearOfPanel(screen,panel));assert.ok(screen.left>=38-1e-7);assert.ok(screen.right<=400-38+1e-7);
+  assert.ok(screen.top>=64+38-1e-7);assert.ok(screen.bottom<=312-38+1e-7);
+});
+
+test('fixture fit remains inside a clear portrait map above a bottom sheet, including short phones',()=>{
+  const bounds={x:250,y:375,width:3.27,height:3.77};
+  for(const [width,height] of [[320,443],[390,716],[600,850]]){
+    const panel={x:12,y:height-48-height*.46,width:width-24,height:height*.46};
+    const camera=fitMapCameraWithPanel(bounds,width,height,panel,{top:64,bottom:30,padding:38});
+    const screen=screenBounds(camera,width,height,bounds);
+    assert.ok(camera.zoom>1,`${width}: local fixture retained`);assert.ok(clearOfPanel(screen,panel));
+    assert.ok(screen.left>=-1e-7&&screen.right<=width+1e-7);assert.ok(screen.top>=64-1e-7&&screen.bottom<=panel.y-12+1e-7);
+    const center={x:(screen.left+screen.right)/2,y:(screen.top+screen.bottom)/2};
+    assert.ok(center.x>=16&&center.x<=width-16);assert.ok(center.y>=64+16&&center.y<=panel.y-12-16);
+  }
+});
+
+test('reapplying a fixture fit after rotation keeps it visible where free-pan resize alone loses it',()=>{
+  const bounds={x:250,y:375,width:3.27,height:3.77},portraitPanel={x:12,y:340.8,width:366,height:331.2};
+  const portrait=fitMapCameraWithPanel(bounds,390,720,portraitPanel,{top:64,bottom:30,padding:38});
+  const landscapePanel={x:412,y:58,width:300,height:242};
+  const landscape=fitMapCameraWithPanel(bounds,780,342,landscapePanel,{top:64,bottom:30,padding:38});
+  for(const [camera,width,height,panel] of [[portrait,390,720,portraitPanel],[landscape,780,342,landscapePanel]]){
+    const screen=screenBounds(camera,width,height,bounds);assert.ok(clearOfPanel(screen,panel));
+    assert.ok(screen.left>=0&&screen.right<=width);assert.ok(screen.top>=64-1e-7&&screen.bottom<=height-30+1e-7);
+  }
+  // A user pan cancels the fixture intent in the UI; the existing free-pan
+  // resize contract remains available and preserves world center exactly.
+  const panned={...portrait,x:portrait.x+5,y:portrait.y+7},resized=resizeMapCamera(panned,390,780,.4);
+  assert.equal(resized.x,panned.x);assert.equal(resized.y,panned.y);
+});
+
+test('panel-aware fitting handles asymmetric insets, wide crop shapes and the zoom ceiling without changing generic fit',()=>{
+  const cases=[
+    {width:1376,height:780,panel:{x:1008,y:240,width:290,height:477},insets:{left:342,top:64,bottom:33,padding:38},bounds:{x:200,y:300,width:8,height:3}},
+    {width:764,height:780,panel:{x:434,y:230,width:260,height:487},insets:{top:64,bottom:33,padding:38},bounds:{x:200,y:300,width:3,height:8}},
+    {width:1920,height:540,panel:{x:1500,y:58,width:300,height:440},insets:{top:64,bottom:33,padding:38},bounds:{x:200,y:300,width:.001,height:.001}},
+  ];
+  for(const {width,height,panel,insets,bounds} of cases){
+    const camera=fitMapCameraWithPanel(bounds,width,height,panel,insets),screen=screenBounds(camera,width,height,bounds);
+    assert.ok([camera.x,camera.y,camera.zoom].every(Number.isFinite));assert.ok(camera.zoom>0&&camera.zoom<=MAX_MAP_ZOOM);
+    assert.ok(clearOfPanel(screen,panel));assert.ok(screen.left>=(insets.left||0)-1e-7&&screen.right<=width+1e-7);
+    assert.ok(screen.top>=insets.top-1e-7&&screen.bottom<=height-insets.bottom+1e-7);
+  }
+  assert.equal(fitMapCameraWithPanel(cases[2].bounds,1920,540,cases[2].panel,cases[2].insets).zoom,MAX_MAP_ZOOM);
+  const bounds={x:200,y:300,width:3,height:8},insets={left:30,bottom:40,padding:24};
+  assert.deepEqual(fitMapCameraWithPanel(bounds,1000,700,null,insets),fitMapCamera(bounds,1000,700,insets));
+  assert.deepEqual(fitMapCameraWithPanel(bounds,1000,700,{x:1100,y:0,width:100,height:100},insets),fitMapCamera(bounds,1000,700,insets));
 });
