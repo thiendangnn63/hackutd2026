@@ -1,5 +1,5 @@
 import {node,button,svgNode,icon,iconButton,title,count} from './ui.js';
-import {geometryOf,geometryBounds,demoLocations,buildSubtiles,detailLevel,cameraView,zoomAt as boundedZoom,fitMapCamera,resizeMapCamera,startGesture,moveGesture,hospitalityFixture,hospitalityForRegion,searchMapRecords,boundCameraToExtent,NEED_TYPES,MAX_MAP_ZOOM} from './map-model.js';
+import {geometryOf,geometryBounds,demoLocations,buildSubtiles,detailLevel,cameraView,zoomAt as boundedZoom,fitMapCamera,resizeMapCamera,startGesture,moveGesture,hospitalityFixture,hospitalityForRegion,searchMapRecords,planningFacilities,fixtureImageryContext,boundCameraToExtent,NEED_TYPES,MAX_MAP_ZOOM} from './map-model.js';
 import {createReferenceLayer} from './reference-layer.js';
 import {createImageryDetailLayer} from './imagery-layer.js';
 import {createHistoricalLayer} from './historical-layer.js';
@@ -145,6 +145,7 @@ function historicalReady(controller){
   $('#show-flooding').title=controller.hotspots().length?'Open available flood-date street imagery':'Flooded-street detail is unavailable. Dated overviews remain in Imagery.';
   if(!historicalDefaultsApplied&&!imageryModeTouched&&(available.radar||available.water)){imageryMode=available.radar?'radar':'water';if(!imageryOpacityTouched){$('#aerial-opacity').value='100';imagery?.setAttribute('opacity','1');}if(!overlayOpacityTouched)$('#tile-opacity').value='35';historicalDefaultsApplied=true;renderTiles();}
   applyImageryMode(imageryMode);
+  for(const action of detail.querySelectorAll('[data-fixture-capture]'))action.disabled=!controller.hotspots().some(image=>image.id===action.dataset.fixtureImagery&&image.date===action.dataset.fixtureCapture);
 }
 function referenceStatus(state){
   $('#map-reference-status').textContent=state==='ready'?'City of Houston / USGS map references. No access or operating status is implied.':state==='unavailable'?'Street and landmark references could not load.':'Loading street and landmark references…';
@@ -185,10 +186,20 @@ function fitHouston(focus=false){
   if(!svg)return;
   setCamera(cityFitCamera(),true);closeDetail();if(focus)svg.focus({preventScroll:true});
 }
-function focusBounds(bounds,zoomFloor=0){
+function focusBounds(bounds,zoomFloor=0,{visibleDetail=false}={}){
   stopAnimation();
-  const r=rectangle(bounds);
-  let next=fitMapCamera(r,mapSize.width,mapSize.height,{left:sidebarWidth(),bottom:footerHeight(),padding:38});
+  const r=rectangle(bounds),insets={left:sidebarWidth(),right:0,bottom:footerHeight(),padding:38};
+  if(visibleDetail&&!detail.hidden){
+    const panel=detail.getBoundingClientRect(),map=frame.getBoundingClientRect();
+    if(mobile())insets.bottom=Math.max(insets.bottom,map.bottom-panel.top+12);
+    else{
+      insets.right=Math.max(0,map.right-panel.left+12);
+      if(mapSize.width-insets.left-insets.right<280){
+        frame.classList.add('overview-collapsed');$('#mobile-panel-toggle').setAttribute('aria-expanded','false');insets.left=0;
+      }
+    }
+  }
+  let next=fitMapCamera(r,mapSize.width,mapSize.height,insets);
   if(zoomFloor>next.zoom)next=zoomAt(next,zoomFloor/next.zoom,{x:r.x+r.width/2,y:r.y+r.height/2});
   setCamera(next);
 }
@@ -203,6 +214,20 @@ function showTooltip(item,event){
   tooltip.style.left=`${Math.min(b.width-265,Math.max(12,x-b.x+14))}px`;tooltip.style.top=`${Math.min(b.height-90,Math.max(65,y-b.y-70))}px`;
 }
 function areaData(region,cell=null){return cell||{...region,hospitality:parentHospitality(region)};}
+function appendFixtureImagery(parent,locations){
+  const context=fixtureImageryContext(locations);if(!context)return;
+  parent.append(node('p','detail-source',`Fictional planning locations · NOAA aerial context ${context.imageryDate}. Historical imagery does not establish actual reports or facility operation.`));
+  const action=button('View flood imagery',()=>{
+    if(!historicalLayer?.hotspots().some(image=>image.id===context.imageryId&&image.date===context.imageryDate))return;
+    imageryModeTouched=true;imageryOpacityTouched=true;$('#aerial-opacity').value='100';captureDates.flood=context.imageryDate;applyImageryMode('flood');
+    focusBounds(context.bounds,0,{visibleDetail:true});if(svg)setCamera(camera,cameraFitted);
+  },'control');
+  action.dataset.fixtureCapture=context.imageryDate;
+  action.dataset.fixtureImagery=context.imageryId;
+  action.disabled=!historicalLayer?.hotspots().some(image=>image.id===context.imageryId&&image.date===context.imageryDate);
+  action.title=`View NOAA ${context.imageryDate} imagery around these fictional locations`;
+  parent.append(action);
+}
 function selectArea(region,cell=null){
   if(!svg||!region)return;
   activePoiId=null;for(const p of poiLayer.children)p.classList.remove('is-selected');
@@ -219,8 +244,10 @@ function renderAreaDetail(region,cell){
     const total=node('div','detail-total',count(metric(item)));total.append(node('small','','open requests'));detail.append(total);
     const breakdown=node('dl','detail-breakdown');for(const c of NEED_TYPES){const dt=node('dt');dt.append(node('i'),document.createTextNode(title(c)));breakdown.append(dt,node('dd','',count(item.categories?.[c])));}detail.append(breakdown);
     detail.append(node('span',`pill ${item.openCount?'red':''}`,item.openCount?'Reported needs · fictional':'Unknown coverage · check needed'));
-    detail.append(node('p','detail-source',cell?'Subtile locations are synthesized for this exercise. Counts roll up to the neighborhood total.':'Unique open requests. Categories may overlap. Volume does not establish severity or safety.'));
+    detail.append(node('p','detail-source',cell?'Fixed fictional locations roll up to the neighborhood total; zooming does not redistribute reports.':'Unique open requests. Categories may overlap. Volume does not establish severity or safety.'));
     if(!cell)for(const request of data.urgentRequests.filter(r=>r.regionId===region.id))detail.append(node('p','urgent-case-note',`Urgent individual review · ${request.summary}`));
+    const locations=Array.isArray(region.requestLocations)?demoLocations(region).filter(location=>!cell||location.point&&location.point[0]>=cell.bounds[0]&&location.point[0]<=cell.bounds[2]&&location.point[1]>=cell.bounds[1]&&location.point[1]<=cell.bounds[3]):[];
+    appendFixtureImagery(detail,locations);
   }else{
     const h=item.hospitality,total=node('div','detail-total',h.score==null?'—':`${h.score}%`);total.append(node('small','','planning suitability'));detail.append(total);
     const list=node('dl','detail-breakdown');for(const [name,key] of [['Power','power'],['Water','water'],['Access','access']])list.append(node('dt','',name),node('dd','',h[key]==null?(h.utilityCoverage?.[key]?.unknown===100?'Unknown':`${h.utilityCoverage?.[key]?.available??0}% available`):h[key]?'Available':'Unavailable'));list.append(node('dt','','Demo capacity'),node('dd','',h.capacity==null?'Unknown':`${count(h.capacity)} known places`));detail.append(list,node('span','pill blue',`Demo inputs · ${h.coverage??0}% coverage`),node('p','detail-source','Blue reflects area-weighted fictional utility and access inputs. Unknown parts are excluded from the score; known capacity is conserved as you zoom. A site inspection and agency approval are required before use as a shelter. Building imagery alone does not establish suitability.'));
@@ -290,7 +317,7 @@ function renderQueue({preservePosition=false}={}){
   }
   if(places.length&&rows.length)list.append(node('div','places-divider','Facilities · fictional'));
   for(const poi of places){
-    const b=button('',()=>{focusBounds(geometryBounds(poi.region.geometry),3);showPoi(poi);},'area-row place-row');
+    const b=button('',()=>showPoi(poi),'area-row place-row');
     b.dataset.queueKey='facility:'+poi.id;if(searching)b.dataset.searchResult='true';
     const mark=node('span','area-icon '+(poi.type==='medical'?'':'blue'));mark.append(icon(poi.type));
     const copy=node('span','area-copy');copy.append(node('strong','',poi.name),node('small','',`${poi.region.name} · planning only`));b.append(mark,copy,icon('chevron'));list.append(b);
@@ -318,11 +345,13 @@ function showReference(reference){
   const heading=node('div','detail-heading'),copy=node('div');copy.append(node('div','micro-label',reference.referenceType==='street'?'Street · geographic context':title(reference.kind)+' · geographic context'),node('h2','',reference.name));heading.append(copy,iconButton('close','Close map reference',dismissDetail));
   detail.replaceChildren(heading,node('p','detail-source','City of Houston / USGS geographic reference. Access and operating status have not been assessed.'),node('span','pill','Map context'),node('p','detail-source','The red assistance and blue hospitality overlays remain separate fictional planning data.'));detail.focus({preventScroll:true});if(svg)setCamera(camera,cameraFitted);
 }
-function showUnlocated(){if(!svg||!data)return;closeDetail();revealDetail();const h=node('div','detail-heading');h.append(node('h2','','Location needs review'),iconButton('close','Close location review',dismissDetail));detail.replaceChildren(h,node('p','detail-source','These requests remain open. They cannot be placed on the map until a location is established.'));for(const r of data.unlocatedRequests)detail.append(node('p','record-empty',`${r.id}: ${r.summary}`));detail.focus({preventScroll:true});if(svg)setCamera(camera,cameraFitted);}
+function showUnlocated(){if(!svg||!data)return;closeDetail();revealDetail();const h=node('div','detail-heading');h.append(node('h2','','Location needs review'),iconButton('close','Close location review',dismissDetail));detail.replaceChildren(h,node('p','detail-source','These requests remain open. They cannot be placed on the map until a location is established.'));if(data.fixturePlacement?.reason)detail.append(node('p','detail-source',data.fixturePlacement.reason));for(const r of data.unlocatedRequests)detail.append(node('p','record-empty',`${r.id}: ${r.summary}`));detail.focus({preventScroll:true});if(svg)setCamera(camera,cameraFitted);}
 function showPoi(poi){
   if(!svg||!poi)return;
   closeDetail();activePoiId=poi.id;for(const p of poiLayer.children)p.classList.toggle('is-selected',p.dataset.poiId===poi.id);revealDetail();const header=node('div','detail-heading'),copy=node('div');copy.append(node('div','micro-label',`${title(poi.type)} / FICTIONAL FACILITY`),node('h2','',poi.name));header.append(copy,iconButton('close','Close facility details',dismissDetail));detail.replaceChildren(header,node('p','detail-source',`${poi.region.name} · fictional location for this exercise`),node('span','pill blue','Planning only · not operational'));
-  const list=node('dl','detail-breakdown');list.append(node('dt','','Resource'),node('dd','',poi.resource),node('dt','','Demo capacity'),node('dd','',poi.capacity),node('dt','','Status'),node('dd','','Not verified'));detail.append(list,node('p','detail-source','This marker is a fictional planning fixture. Availability, capacity, access, and agency approval have not been verified. It is not a direction to travel.'));detail.focus({preventScroll:true});if(svg)setCamera(camera,cameraFitted);
+  const list=node('dl','detail-breakdown');list.append(node('dt','','Resource'),node('dd','',poi.resource),node('dt','','Demo capacity'),node('dd','',poi.capacity),node('dt','','Status'),node('dd','','Not verified'));detail.append(list,node('p','detail-source','This marker is a fictional planning fixture. Availability, capacity, access, and agency approval have not been verified. It is not a direction to travel.'));appendFixtureImagery(detail,[poi]);
+  const context=fixtureImageryContext([poi]);if(context)focusBounds(context.bounds,0,{visibleDetail:true});
+  detail.focus({preventScroll:true});if(svg)setCamera(camera,cameraFitted);
 }
 function renderPois(){
   poiLayer.replaceChildren();const enabled=[...document.querySelectorAll('input[name=poi]:checked')].map(e=>e.value);
@@ -370,8 +399,7 @@ function initializeMap(){
   paintLayer=svgNode('g',{'clip-path':'url(#city-clip)'});poiLayer=svgNode('g',{'aria-label':'Fictional facilities'});svg.append(land,paintLayer,svgNode('path',{d:path(data.city.boundary),fill:'none',stroke:'#b1c5de','stroke-opacity':.45,'stroke-width':1,'vector-effect':'non-scaling-stroke','fill-rule':'evenodd','pointer-events':'none'}));
   const labels=svgNode('g',{'aria-hidden':'true'});for(const [i,r]of data.regions.entries())if(r.labelPoint&&(i<3||i%9===0)){const [x,y]=project(r.labelPoint),t=svgNode('text',{x,y,class:'map-place-name',fill:'#dbe6f6',stroke:'#0d1119','font-size':5,'text-anchor':'middle'});t.dataset.size='9';t.dataset.rank=String(i<3?i+1:100+i);t.textContent=r.name.toUpperCase();labels.append(t);}const [hx,hy]=project([-95.3698,29.7604]),cityLabel=svgNode('text',{x:hx,y:hy,class:'map-place-name',fill:'#e7edf5',stroke:'#0d1119','font-size':10,'font-weight':600,'text-anchor':'middle'});cityLabel.dataset.size='15';cityLabel.dataset.rank='0';cityLabel.textContent='HOUSTON';labels.append(cityLabel);referenceLayer=createReferenceLayer({project,onStatus:referenceStatus,onReady:()=>{if(svg){if($('#map-search').value.trim())renderQueue({preservePosition:true});setCamera(camera,cameraFitted);}}});
   referenceLayer.setVisible({streets:$('#map-streets').checked,landmarks:$('#map-landmarks').checked});svg.append(referenceLayer.element,labels,poiLayer);root.append(svg);referenceLayer.load();historicalLayer.load();
-  const fixtures=[['supplies','Northside distribution hub','Water & essential supplies','240 kits',5],['shelter','West community shelter','Temporary hospitality','120 people',18],['medical','Central medical point','Medical assessment','24 stations',60],['supplies','East supply center','Food & essential supplies','180 kits',57],['shelter','South community hub','Temporary hospitality','90 people',42],['medical','North medical point','Medical assessment','12 stations',1]];
-  pois=fixtures.flatMap(([type,name,resource,capacity,index],i)=>{const region=data.regions[index];return region?.labelPoint?[{id:`facility-${i}`,type,name,resource,capacity,region,point:region.labelPoint}]:[];});
+  pois=planningFacilities(data.regions,data.facilities);
   pointers.clear();gesture=null;bindGestures();observer=new ResizeObserver(entries=>{
     const {width,height}=entries[0].contentRect;
     if(!svg||!width||!height||(width===mapSize.width&&height===mapSize.height))return;

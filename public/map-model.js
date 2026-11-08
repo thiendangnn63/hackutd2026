@@ -69,7 +69,14 @@ export function hash(value) {
   for(const c of String(value)) { h^=c.charCodeAt(0); h=Math.imul(h,16777619); }
   return h>>>0;
 }
+const geographicPoint=point=>Array.isArray(point)&&point.length===2&&point.every(Number.isFinite)&&point[0]>=-180&&point[0]<=180&&point[1]>=-90&&point[1]<=90;
 export function demoLocations(region) {
+  // Explicit fixture coordinates are authoritative. A missing/invalid point
+  // stays unplaced instead of being regenerated elsewhere in the neighborhood.
+  if(Array.isArray(region.requestLocations))return region.requestLocations.map(location=>({
+    ...location,point:geographicPoint(location.point)&&insideGeometry(location.point,region.geometry)?[...location.point]:null,
+    categories:NEED_TYPES.filter(category=>Array.isArray(location.categories)&&location.categories.includes(category))
+  }));
   const bounds=geometryBounds(region.geometry);
   if(!bounds) return [];
   let seed=hash(region.id);
@@ -85,6 +92,24 @@ export function demoLocations(region) {
     points.push({point,categories:NEED_TYPES.filter(c=>i<(region.categories?.[c]||0))});
   }
   return points;
+}
+export function planningFacilities(regions,facilities=[]) {
+  const byId=new Map(regions.map(region=>[region.id,region]));
+  return (Array.isArray(facilities)?facilities:[]).flatMap(facility=>{
+    const region=byId.get(facility?.regionId);
+    return region&&['supplies','shelter','medical'].includes(facility.type)&&geographicPoint(facility.point)&&insideGeometry(facility.point,region.geometry)
+      ?[{...facility,region,point:[...facility.point]}]:[];
+  });
+}
+export function fixtureImageryContext(locations) {
+  const placed=(Array.isArray(locations)?locations:[]).filter(location=>geographicPoint(location.point));
+  if(!placed.length)return null;
+  const {imageryId,imageryDate}=placed[0];
+  if(typeof imageryId!=='string'||!imageryId||!/^\d{4}-\d{2}-\d{2}$/.test(imageryDate)||
+    placed.some(location=>location.imageryId!==imageryId||location.imageryDate!==imageryDate))return null;
+  const bounds=placed.reduce((box,{point:[x,y]})=>[Math.min(box[0],x),Math.min(box[1],y),Math.max(box[2],x),Math.max(box[3],y)],[Infinity,Infinity,-Infinity,-Infinity]);
+  // Context around the invented points remains visible, including nearby water.
+  return {imageryId,imageryDate,bounds:[bounds[0]-.002,bounds[1]-.002,bounds[2]+.002,bounds[3]+.002]};
 }
 export function hospitalityFixture(id) {
   const h=hash(id);
@@ -143,7 +168,7 @@ export function buildSubtiles(region, level, locations=demoLocations(region)) {
   const cells=hospitalityForRegion(region,level).map(cell=>({...cell,openCount:0,
     categories:Object.fromEntries(NEED_TYPES.map(c=>[c,0]))}));
   for(const {point,categories} of locations) {
-    if(!point) continue;
+    if(!geographicPoint(point)||!insideGeometry(point,region.geometry)) continue;
     const col=Math.min(n-1,Math.max(0,Math.floor((point[0]-bounds[0])/(bounds[2]-bounds[0])*n)));
     const row=Math.min(n-1,Math.max(0,Math.floor((point[1]-bounds[1])/(bounds[3]-bounds[1])*n)));
     const cell=cells[row*n+col];cell.openCount++;

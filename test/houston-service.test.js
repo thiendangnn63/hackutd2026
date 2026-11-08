@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HoustonService } from '../src/houston-service.js';
@@ -16,6 +16,12 @@ function fixture(t) {
   put('houston-city.json', { type: 'Feature', properties: { name: 'Houston' }, geometry });
   put('houston-neighborhoods.json', { type: 'FeatureCollection', features: ['A','B','C','D'].map(id => ({ type: 'Feature', properties: { id, name: `Test region ${id}` }, geometry })) });
   put('houston-geography-meta.json', { bbox: [-95.8,29.6,-95.2,30], sourceUrls: ['https://example.invalid/test-only'], attribution: 'Test fixture, not geography', basemap: { available: true, file: 'houston-imagery.jpg', bbox: [-95.8,29.6,-95.2,30], date: 'Historical test fixture' } });
+  const clusters = ['supplies','evacuation','medical'].map((id,index) => ({ id, regionId: ['A','B','C'][index], imageryId: 'test-flight', imageryDate: '2017-08-30', requestCount: [300,100,2][index], categories: [['supplies'],['evacuation','supplies'],['medical']][index], points: Array.from({ length: [300,100,2][index] }, () => [-95.5,29.8]) }));
+  put('houston-demo-placements.json', { schemaVersion:1, fictional:true, crs:'EPSG:4326', clusters, facilities:[{id:'test-facility',type:'supplies',name:'Fictional planning point',resource:'Water',capacity:'20 demo kits',regionId:'A',point:[-95.5,29.8],imageryId:'test-flight',imageryDate:'2017-08-30'}] });
+  mkdirSync(join(directory,'flood-imagery'));
+  writeFileSync(join(directory,'flood-imagery/test-flight.webp'), 'fictional asset fixture, no decoding');
+  writeFileSync(join(directory,'flood-imagery/same-date-other.webp'), 'different fictional asset fixture');
+  put('houston-flood-imagery.json', { schemaVersion:1,crs:'EPSG:4326',imagery:[{id:'test-scene',date:'2017-08-30',overview:{id:'test-flight',date:'2017-08-30',crs:'EPSG:4326',bbox:[-95.8,29.6,-95.2,30],path:'/data/flood-imagery/test-flight.webp'},detail:[{id:'same-date-other',date:'2017-08-30',crs:'EPSG:4326',bbox:[-95.8,29.6,-95.2,30],path:'/data/flood-imagery/same-date-other.webp'}]}] });
   return { root, directory, put, service: new HoustonService(root) };
 }
 
@@ -27,6 +33,78 @@ test('Houston summary uses verified region files and separates image absence fro
   writeFileSync(join(f.directory, 'houston-imagery.jpg'), 'fixture image bytes, never decoded');
   assert.equal(f.service.view().basemap.url, '/data/houston-imagery.jpg');
   assert.equal(f.service.view().basemap.available, true);
+});
+
+test('explicit fixture locations and fictional facilities survive the service contract with exact totals', t => {
+  const f = fixture(t), result = f.service.view();
+  assert.equal(result.fixturePlacement.available, true); assert.equal(result.fixturePlacement.locationSource, 'fictional-fixture');
+  assert.deepEqual(result.stats, { openRequests:403, regionsWithReports:3, coverageChecks:1, urgentRequests:1, unlocatedRequests:1 });
+  assert.equal(result.regions.reduce((sum, region) => sum + region.requestLocations.length, 0), 402);
+  const location = result.regions.find(region => region.id === 'B').requestLocations.find(location => location.id === 'houston-demo-1-0');
+  assert.deepEqual(location, { id:'houston-demo-1-0',point:[-95.5,29.8],categories:['evacuation','supplies'],locationSource:'fictional-fixture',imageryId:'test-flight',imageryDate:'2017-08-30' });
+  assert.equal(result.facilities[0].point[0], -95.5); assert.equal(result.facilities[0].regionId, 'A'); assert.equal(result.facilities[0].fictional, true); assert.equal(result.facilities[0].operational, false);
+  const neighborhoods = JSON.parse(readFileSync(join(f.directory, 'houston-neighborhoods.json')));
+  neighborhoods.features.reverse(); f.put('houston-neighborhoods.json', neighborhoods);
+  const reversed = f.service.view();
+  assert.deepEqual(reversed.regions.find(region => region.id === 'B').requestLocations, result.regions.find(region => region.id === 'B').requestLocations);
+  assert.deepEqual(reversed.facilities, result.facilities);
+});
+
+test('missing or malformed placements retain geography and raw demand as explicitly unplaced', t => {
+  const f = fixture(t);
+  for (const missing of [true, false]) {
+    if (missing) rmSync(join(f.directory, 'houston-demo-placements.json'));
+    else f.put('houston-demo-placements.json', { schemaVersion:1,fictional:false,crs:'EPSG:4326',clusters:[] });
+    const result = f.service.view();
+    assert.equal(result.available, true); assert.equal(result.fixturePlacement.available, false); assert.match(result.fixturePlacement.reason, /no random locations were substituted/);
+    assert.equal(result.stats.openRequests, 403); assert.equal(result.stats.unlocatedRequests, 403); assert.equal(result.maxOpenCount, 0);
+    assert.ok(result.regions.every(region => region.requestLocations.length === 0)); assert.deepEqual(result.facilities, []);
+    const empty = f.service.view({ scenario:'empty' }); assert.equal(empty.stats.openRequests, 0); assert.equal(empty.fixturePlacement.available, false);
+  }
+});
+
+test('unregistered image context never supplies request points, while invalid facility points remain reviewable', t => {
+  const f = fixture(t), manifest = JSON.parse(readFileSync(join(f.directory, 'houston-demo-placements.json')));
+  manifest.facilities[0].point = [-96,31]; f.put('houston-demo-placements.json', manifest);
+  let result = f.service.view(); assert.equal(result.fixturePlacement.available, false); assert.equal(result.stats.unlocatedRequests, 1);
+  assert.equal(result.facilities[0].point, null); assert.equal(result.facilities[0].locationIssue, 'outside_assigned_region');
+  rmSync(join(f.directory, 'houston-flood-imagery.json'));
+  result = f.service.view(); assert.equal(result.available, true); assert.equal(result.stats.unlocatedRequests, 403); assert.equal(result.maxOpenCount, 0); assert.equal(result.fixturePlacement.available, false);
+});
+
+test('missing exact flood asset leaves its fixtures unplaced even when another same-date image is available', t => {
+  const f = fixture(t); assert.equal(f.service.view().fixturePlacement.available, true);
+  rmSync(join(f.directory,'flood-imagery/test-flight.webp'));
+  assert.ok(readFileSync(join(f.directory,'flood-imagery/same-date-other.webp')).length > 0);
+  const result = f.service.view();
+  assert.equal(result.available, true); assert.equal(result.fixturePlacement.available, false);
+  assert.equal(result.stats.openRequests, 403); assert.equal(result.stats.unlocatedRequests, 403);
+  assert.equal(result.maxOpenCount, 0); assert.ok(result.regions.every(region => region.requestLocations.length === 0));
+  assert.equal(result.facilities[0].point, null); assert.equal(result.facilities[0].locationIssue, 'unknown_imagery_reference');
+  assert.equal(result.facilities[0].imageryId, 'test-flight');
+});
+
+test('per-asset image date and CRS are not borrowed from a containing scene', t => {
+  const f = fixture(t), manifest = JSON.parse(readFileSync(join(f.directory,'houston-flood-imagery.json')));
+  manifest.imagery[0].overview.date = '2017-09-01'; f.put('houston-flood-imagery.json',manifest);
+  assert.equal(f.service.view().stats.unlocatedRequests, 403);
+  manifest.imagery[0].overview.date = '2017-08-30'; manifest.imagery[0].overview.crs = 'EPSG:3857'; f.put('houston-flood-imagery.json',manifest);
+  assert.equal(f.service.view().stats.unlocatedRequests, 403);
+});
+
+test('malformed historical image registration cannot remove verified city geography', t => {
+  const f = fixture(t), manifest = JSON.parse(readFileSync(join(f.directory,'houston-flood-imagery.json')));
+  manifest.imagery[0].detail = {}; f.put('houston-flood-imagery.json',manifest);
+  const result = f.service.view(); assert.equal(result.available, true); assert.equal(result.fixturePlacement.available, false);
+  assert.equal(result.stats.unlocatedRequests, 403); assert.equal(result.maxOpenCount, 0);
+});
+
+test('bundled manifest places exact demand only in stable covered-region IDs', () => {
+  const result = new HoustonService(new URL('..', import.meta.url).pathname).view();
+  assert.equal(result.available, true); assert.equal(result.fixturePlacement.available, true);
+  assert.deepEqual(result.stats, { openRequests:403, regionsWithReports:3, coverageChecks:86, urgentRequests:1, unlocatedRequests:1 });
+  assert.deepEqual(result.regions.filter(region => region.openCount).map(region => [region.id,region.openCount]), [['houston-sn-09',2],['houston-sn-17',300],['houston-sn-43',100]]);
+  assert.equal(result.facilities.length, 6); assert.ok(result.facilities.every(facility => facility.point && facility.operational === false));
 });
 
 test('empty scenario preserves every coverage area with finite zero intensity', t => {
@@ -55,7 +133,9 @@ test('Houston API rejects foreign cities and origins and does not mutate family 
   t.after(() => new Promise(resolve => app.close(resolve)));
   const base = `http://127.0.0.1:${app.address().port}`;
   const normal = await fetch(base + '/api/houston'); assert.equal(normal.status, 200);
-  assert.equal((await normal.json()).maxOpenCount, 300);
+  const normalBody = await normal.json(); assert.equal(normalBody.maxOpenCount, 300);
+  assert.equal(normalBody.regions.reduce((sum,region) => sum + region.requestLocations.length, 0), 402);
+  assert.equal(normalBody.facilities[0].operational, false);
   const empty = await fetch(base + '/api/houston?scenario=empty'); assert.equal((await empty.json()).stats.openRequests, 0);
   for (const query of ['?city=pasadena', '?scenario=live', '?path=../secrets']) assert.equal((await fetch(base + '/api/houston' + query)).status, 400);
   assert.equal((await fetch(base + '/api/houston', { headers: { origin: 'https://unrelated.invalid' } })).status, 403);

@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {planningFacilities,fixtureImageryContext} from '../public/map-model.js';
 import {boundCameraToExtent,searchMapRecords,geometryBounds,insideGeometry,hasIntersection,demoLocations,buildSubtiles,hospitalityFixture,hospitalityForRegion,NEED_TYPES,detailLevel,cameraView,zoomAt,MAX_MAP_ZOOM} from '../public/map-model.js';
 import {HoustonService} from '../src/houston-service.js';
 const root=new URL('..',import.meta.url).pathname;
@@ -180,4 +182,67 @@ test('street-level zoom passes the former limit and remains anchored at the shar
   assert.equal(capped.zoom,MAX_MAP_ZOOM);
   assert.equal((anchor.x-capped.x)*capped.zoom,(anchor.x-camera.x)*camera.zoom);
   assert.equal((anchor.y-capped.y)*capped.zoom,(anchor.y-camera.y)*camera.zoom);
+});
+
+test('explicit request positions and source dates survive subdivision without redistribution or mutation',()=>{
+  const region={id:'explicit',geometry:square,openCount:2,categories:{medical:1,supplies:2},requestLocations:[
+    {id:'report-a',point:[.4,.4],categories:['medical','supplies'],imageryId:'noaa-a',imageryDate:'2017-08-30'},
+    {id:'report-b',point:[3.8,3.8],categories:['supplies'],imageryId:'noaa-a',imageryDate:'2017-08-30'}
+  ]},before=structuredClone(region);
+  const locations=demoLocations(region);assert.deepEqual(locations,region.requestLocations);
+  for(const level of [0,1,2]){
+    const cells=buildSubtiles(region,level);assert.equal(cells.reduce((sum,cell)=>sum+cell.openCount,0),2);
+    assert.equal(cells.reduce((sum,cell)=>sum+cell.categories.medical,0),1);
+    assert.equal(cells.reduce((sum,cell)=>sum+cell.categories.supplies,0),2);
+  }
+  const context=fixtureImageryContext(locations);assert.equal(context.imageryId,'noaa-a');assert.equal(context.imageryDate,'2017-08-30');
+  context.bounds.forEach((value,index)=>assert.ok(Math.abs(value-[.398,.398,3.802,3.802][index])<1e-12));
+  locations[0].point[0]=9;locations[0].categories.length=0;assert.deepEqual(region,before);
+});
+
+test('missing explicit locations stay unplaced and outside/hole points are never clamped into valid cells',()=>{
+  const region={id:'invalid',geometry:square,openCount:4,categories:{supplies:4},requestLocations:[
+    {id:'missing',point:null,categories:['supplies']},
+    {id:'outside',point:[10,10],categories:['supplies']},
+    {id:'hole',point:[2,2],categories:['supplies']},
+    {id:'invalid',point:[NaN,1],categories:['supplies']}
+  ]};
+  assert.deepEqual(demoLocations(region).map(location=>location.point),[null,null,null,null]);
+  assert.equal(buildSubtiles(region,2).reduce((sum,cell)=>sum+cell.openCount,0),0);
+  assert.equal(buildSubtiles(region,2,region.requestLocations).reduce((sum,cell)=>sum+cell.openCount,0),0);
+  assert.deepEqual(demoLocations({...region,requestLocations:[]}),[]);
+  assert.equal(fixtureImageryContext(region.requestLocations.slice(0,1)),null);
+  assert.equal(fixtureImageryContext([{point:[1,1],imageryId:'a',imageryDate:'2017-08-30'},{point:[3,3],imageryId:'b',imageryDate:'2017-08-31'}]),null);
+});
+
+test('facilities resolve stable region IDs and preserve explicit points instead of taking region centroids',()=>{
+  const regions=[{id:'other',geometry:square,labelPoint:[.2,.2]},{id:'target',geometry:square,labelPoint:[3.8,3.8]}];
+  const facilities=[{id:'valid',type:'shelter',regionId:'target',point:[.5,.5],imageryId:'noaa',imageryDate:'2017-08-30',fictional:true,operational:false},
+    {id:'unplaced',type:'medical',regionId:'target',point:null},{id:'hole',type:'supplies',regionId:'target',point:[2,2]},
+    {id:'unknown-region',type:'shelter',regionId:'missing',point:[.5,.5]}],before=structuredClone(facilities);
+  const places=planningFacilities(regions,facilities);assert.deepEqual(places.map(place=>place.id),['valid']);
+  assert.equal(places[0].region,regions[1]);assert.deepEqual(places[0].point,[.5,.5]);assert.equal(places[0].operational,false);
+  places[0].point[0]=9;assert.deepEqual(facilities,before);
+});
+
+test('bundled covered fixtures preserve counts/categories inside exact assigned Houston regions and imagery bounds',()=>{
+  const read=name=>JSON.parse(readFileSync(new URL(`../public/data/${name}`,import.meta.url),'utf8'));
+  const manifest=read('houston-demo-placements.json'),city=read('houston-city.json'),features=read('houston-neighborhoods.json').features;
+  const images=read('houston-flood-imagery.json').imagery.flatMap(scene=>scene.detail);
+  let total=0;const categories=Object.fromEntries(NEED_TYPES.map(category=>[category,0]));
+  for(const cluster of manifest.clusters){
+    const feature=features.find(feature=>feature.properties.id===cluster.regionId),image=images.find(image=>image.id===cluster.imageryId);
+    assert.ok(feature);assert.ok(image);assert.equal(image.date,cluster.imageryDate);assert.equal(cluster.points.length,cluster.requestCount);
+    const region={id:cluster.regionId,geometry:feature.geometry,openCount:cluster.requestCount,categories:Object.fromEntries(NEED_TYPES.map(category=>[category,cluster.categories.includes(category)?cluster.requestCount:0])),requestLocations:cluster.points.map((point,index)=>({id:`${cluster.id}-${index}`,point,categories:cluster.categories,imageryId:cluster.imageryId,imageryDate:cluster.imageryDate}))};
+    for(const point of cluster.points){assert.ok(insideGeometry(point,city));assert.ok(insideGeometry(point,feature));assert.ok(point[0]>image.bbox[0]&&point[0]<image.bbox[2]&&point[1]>image.bbox[1]&&point[1]<image.bbox[3]);}
+    for(const level of [0,1,2]){
+      const cells=buildSubtiles(region,level);assert.equal(cells.reduce((sum,cell)=>sum+cell.openCount,0),cluster.requestCount);
+      for(const category of NEED_TYPES)assert.equal(cells.reduce((sum,cell)=>sum+cell.categories[category],0),region.categories[category]);
+    }
+    total+=cluster.requestCount;for(const category of cluster.categories)categories[category]+=cluster.requestCount;
+  }
+  assert.equal(total,402);assert.deepEqual(categories,{medical:2,evacuation:100,supplies:400,other:0});
+  const regions=features.map(feature=>({id:feature.properties.id,geometry:feature.geometry}));
+  assert.equal(planningFacilities(regions,manifest.facilities).length,6);
+  for(const facility of manifest.facilities){assert.ok(insideGeometry(facility.point,city));assert.equal(facility.fictional,true);assert.equal(facility.operational,false);}
 });

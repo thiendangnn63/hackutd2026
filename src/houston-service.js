@@ -1,7 +1,8 @@
 import { readFileSync, existsSync, lstatSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { InputError } from './domain.js';
-import { buildHoustonSummary, createHoustonFixtures } from './houston.js';
+import { buildHoustonSummary, createHoustonFixtures, createHoustonFacilities } from './houston.js';
+import { historicalImagery } from './historical-imagery.js';
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const CONTEXT_FILES = new Set(['earth-context.jpg','houston-context.jpg','houston-metro.png']);
@@ -69,7 +70,26 @@ export class HoustonService {
       if (boundary.type !== 'Feature' || !['Polygon', 'MultiPolygon'].includes(boundary.geometry?.type) || neighborhoods.type !== 'FeatureCollection' || !neighborhoods.features.length || !Array.isArray(metadata.bbox) || metadata.bbox.length !== 4 || !metadata.bbox.every(Number.isFinite)) throw new Error('Invalid Houston geometry');
       const regions = neighborhoods.features.map(feature => ({ id: typeof feature.properties?.id === 'string' ? feature.properties.id : '', name: feature.properties?.name, labelPoint: feature.properties?.labelPoint || null, geometry: feature.geometry }));
       if (regions.some(region => !region.id || typeof region.name !== 'string' || !['Polygon', 'MultiPolygon'].includes(region.geometry?.type)) || new Set(regions.map(region => region.id)).size !== regions.length) throw new Error('Invalid Houston regions');
-      const summary = buildHoustonSummary(regions, createHoustonFixtures(regions, { mode: scenario }));
+      let placements = null, imagery = [], placementReason = null, requests, facilities = [];
+      try { placements = readJson(resolve(data, 'houston-demo-placements.json')); }
+      catch { placementReason = 'Fictional fixture locations are unavailable. Requests remain in location review; no random locations were substituted.'; }
+      try {
+        const flood = historicalImagery(this.root).flood;
+        imagery = flood.imagery.flatMap(scene => [scene.overview, ...scene.detail]).filter(Boolean);
+      } catch { /* Invalid image registration leaves locations unplaced, not invented. */ }
+      try {
+        requests = createHoustonFixtures(regions, { mode: scenario, placements, imagery });
+        facilities = createHoustonFacilities(regions, placements, { imagery });
+      } catch {
+        placements = null;
+        requests = createHoustonFixtures(regions, { mode: scenario, placements: null });
+        placementReason = 'Fictional fixture placement data is invalid. Requests remain in location review; no random locations were substituted.';
+      }
+      const summary = buildHoustonSummary(regions, requests);
+      for (const region of summary.regions) region.requestLocations ??= [];
+      const unavailableLocations = summary.unlocatedRequests.some(request => request.id !== 'houston-demo-unlocated') || facilities.some(facility => !facility.point);
+      if (unavailableLocations && !placementReason) placementReason = 'Some fictional locations do not match their assigned Houston area and registered image footprint. They remain unplaced for review.';
+      const fixturePlacement = { available: placements !== null && !unavailableLocations, fictional: true, crs: 'EPSG:4326', locationSource: 'fictional-fixture', reason: placementReason };
       const image = metadata.basemap || {};
       const hasImage = image.available === true && image.file === 'houston-imagery.jpg' && existsSync(resolve(data, image.file));
       return {
@@ -80,7 +100,8 @@ export class HoustonService {
         imageryPyramid: this.imageryPyramid(),
         basemap: { ...image, available: hasImage, url: hasImage ? '/data/houston-imagery.jpg' : null, reason: hasImage ? null : (image.reason || 'Aerial imagery is unavailable. Boundaries and simulated counts remain visible.') },
         ...summary,
-        limitations: ['Fictional open requests, separate from the Oak District family exercise. No live SMS data.', 'Red intensity reflects request volume, not severity, population risk or personal safety.', 'Review order medical, evacuation, supplies is a demo preference, not clinical triage or automatic dispatch.', 'No-report areas remain unknown and need coverage checks.', 'Historical background context may include surrounding cities; request tiles and selections remain Houston-only.'],
+        fixturePlacement, facilities,
+        limitations: ['Fictional open requests, separate from the Oak District family exercise. No live SMS data.', 'Fictional points are staged within historical image footprints for this exercise; the image does not establish a reported need or operating facility.', 'Red intensity reflects request volume, not severity, population risk or personal safety.', 'Review order medical, evacuation, supplies is a demo preference, not clinical triage or automatic dispatch.', 'No-report areas remain unknown and need coverage checks.', 'Historical background context may include surrounding cities; request tiles and selections remain Houston-only.'],
       };
     } catch {
       return { available: false, mode: 'simulation', reason: 'Verified Houston geography is not available. No approximate city shapes or report counts have been substituted.' };
