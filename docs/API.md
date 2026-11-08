@@ -1,6 +1,6 @@
 # Demo API contract
 
-All family reports and Houston requests are fictional; the geographic context and optional historical satellite model are real and separately attributed. The HTTP server binds only to 127.0.0.1. JSON errors use `{error: message}`. All successful family mutations return the full state plus action metadata (`caseId`, `duplicate`). Browser UI fetches GET /api/state initially then uses state in mutation responses.
+All family reports and Houston requests are fictional; the geographic context and optional historical satellite model are real and separately attributed. The HTTP server binds only to 127.0.0.1. JSON errors use `{error: message}`. All successful family mutations return the full state plus action metadata (`caseId`, `duplicate`). Browser UI shares one versioned family-state client across Casework, People and Messages. It reads GET /api/state, accepts committed mutation responses, and subscribes to local GET /api/events updates.
 
 State:
 - `mode: 'simulation'`, `scenarioTime` ISO timestamp, `incident: {id,name,active,tiles:['A1','A2','B1','B2'],policy:{maxTiles:2,locationMaxAgeMinutes:120,maxRecipients:20}}`
@@ -47,13 +47,13 @@ The redesigned browser consumes the existing GET /api/houston, GET /api/state an
 
 The browser constructs deterministic fictional request coordinates within each region, conserves its request/category totals when partitioning to 2×2 or 4×4 cells, and clips visual cells to the official polygons including holes. Hospitality scores, utility inputs, capacities, and POIs are explicitly fictional client-side planning fixtures, independent of satellite predictions and family welfare. They must be replaced with verified source data before any operational use.
 
-Messages and People derive their indexes only from existing case/participant/report/outbox state. Conversation order uses receipt time for incoming reports and queue time for simulated outgoing messages, while still displaying observation times separately. Source text is inserted as text, never HTML. Local mutation responses trigger a browser state-change event so these views update without persisting duplicate data.
+Messages and People derive their indexes only from existing case/participant/report/outbox state. Conversation order uses receipt time for incoming reports and queue time for simulated outgoing messages, while still displaying observation times separately. Source text is inserted as text, never HTML. Committed local state arrives over a same-origin SSE stream as well as mutation responses, so these views update without a page reload or duplicate persistence.
 
 The presentation index preserves messages whose case reference is null or no longer exists in an explicit unassigned review thread. Participant records show their own authored reports and addressed messages; a linked family's welfare verification is not applied to the participant. Explicit conversation links carry case context into the message lab.
 
 Hospitality parent scores now aggregate the fixed finest-level fixtures using clipped land area. Known capacity sums across children; unknown inputs stay unknown, mixed utility states expose percentages, and partial coverage is labeled. These remain fictional planning values.
 
-Client state refreshes are guarded by a local revision counter so an older GET cannot supersede a newer mutation response. Successful client actions emit family-action-complete after state rendering; Casework uses that explicit action outcome for navigation, without changing HTTP payloads or domain states. Participant outgoing-history selection uses recipient IDs directly, including unresolved case references.
+Client state refreshes use a process-session UUID and monotonically increasing Store revision so stale GETs, mutation responses and stream frames cannot supersede newer state. Native stream reconnects handle local server restarts; ambiguous session changes require one shared local confirmation read, without an automatic retry loop. Successful client actions emit family-action-complete after state rendering; Casework uses that explicit action outcome for navigation, without changing HTTP payloads or domain states. Participant outgoing-history selection uses recipient IDs directly, including unresolved case references.
 
 
 ## Geographic detail and historical raster reads
@@ -66,3 +66,18 @@ The three static geographic-reference JSONs expose named City streets, landmarks
 
 
 GET `/data/houston-observation-coverage.json` is a fixed local static read for optical observation availability. Schema1 uses EPSG:4326, `encoding:"observed-pixel-counts"`, `blockSize:16`, and dated scenes with bounds, analysis-grid dimensions, row-major block counts, total observed pixels and source-index hashes. The frontend compiles validated counts once and queries the visible extent with uncertainty bounds for partly intersected blocks. `/map-coverage.js` and `/observation-view.js` are exact static module routes. Suggestions use only available post-event dates and require an explicit click; they do not pan, classify water/flooding, or mutate case state.
+
+
+## Local committed-state stream
+
+GET `/api/events` sends native Server-Sent Events with `{sessionId,revision,state}` and event IDs `${sessionId}:${revision}`. A connection receives the current snapshot, then committed Store updates. The existing loopback Host/Origin guards apply before subscribing. Heartbeats keep idle connections alive; blocked connections retain only their newest pending state and eventually disconnect. Closing a connection removes its Store observer. Read/subscription/reconnect never rewrites the saved exercise.
+
+GET `/api/state` and successful family mutation responses include `X-Beacon-Session` and `X-Beacon-Revision` headers. HTTP and stream snapshots share a public projection that removes provider identity and private extraction-job material. A raw report's `modelReview` exposes only a status and a validated review proposal. No public intake, completion, acceptance or provider endpoint is added.
+
+## Inactive raw inbox preparation
+
+`src/report-inbox.js` provides synchronous raw capture and durable leased extraction actions plus an explicitly enabled asynchronous runner with an injected extractor. The server does not start that runner or configure a provider. Capture requires synthetic data, a known fixture sender alias and an explicit existing case or no case. Provider/project/message identity is namespaced and deduplicated; changed content under the same identity is rejected. Original text persists before work starts.
+
+Suggestions stay under `modelReview.proposal`; `observations` remains empty. Failed, stale, queued and proposed reports remain visible for review independently of an earlier resolved case. Suggestions cannot verify welfare, add assistance, dispatch or send replies. Exact STOP revokes the fictional sender's consent deterministically; CHECKIN requests review without reenrollment. There is no acceptance/dismissal workflow in this preparation. The caller must enforce consent, data scope, recipient scope and a spending cap before ever injecting a real model client.
+
+Casework preserves in-progress intake/message/verification fields, selected evidence, text caret, proposal disclosure and reading position during background updates. Verification drafts are case-scoped. People and Messages retain their selected record and source-message focus.

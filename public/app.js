@@ -1,7 +1,11 @@
+import {stateClient} from './state-client.js';
+import {rememberDrafts,restoreDrafts} from './form-drafts.js';
+import {createProposalView,rememberProposalState} from './proposal-view.js';
 'use strict';
 let state = null;
 let selectedCaseId = null;
 let busy = false;
+let hasRendered=false,stateDirty=false;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
@@ -12,14 +16,8 @@ const tag = (text, tone = 'muted') => el('span', 'tag ' + tone, text);
 const empty = text => el('p', 'empty', text);
 const person = id => state.participants.find(p => p.id === id)?.name || id || 'Unknown';
 function notify(text, error = false) { const node = $('#notice'); const message=el('span','notice-message',text);const dismiss=el('button','notice-dismiss','×');dismiss.type='button';dismiss.setAttribute('aria-label','Dismiss status message');dismiss.addEventListener('click',()=>{node.hidden=true;const heading=$('#casework-view h1');heading.tabIndex=-1;heading.focus({preventScroll:true});});node.replaceChildren(message,dismiss);node.className = 'notice' + (error ? ' error' : ''); node.hidden = false; node.scrollIntoView({block:'nearest', behavior:'smooth'}); }
-async function request(path, payload) {
-  const response = await fetch(path, payload === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-  let body; try { body = await response.json(); } catch { throw new Error('The server returned an unreadable response. Please try again.'); }
-  if (!response.ok) throw new Error(body.error || `Request failed (${response.status}).`);
-  const next = body.state || body;
-  if (!Array.isArray(next.cases)) throw new Error('The server returned incomplete incident data.');
-  state = next;
-  return body;
+async function request(path,payload){
+  const body=await stateClient.request(path,payload);state=stateClient.getState();return body;
 }
 async function mutate(path, payload, success, onResult) {
   if (busy) return;
@@ -27,7 +25,7 @@ async function mutate(path, payload, success, onResult) {
   document.body.setAttribute('aria-busy','true'); notify('Processing local simulation…');
   try { const result = await request(path,payload); if (onResult) onResult(result); render(); notify(result.duplicate ? 'Duplicate event recognized. No additional reports or messages were created.' : (typeof success === 'function' ? success(result) : success)); document.dispatchEvent(new CustomEvent('family-action-complete',{detail:{path,duplicate:Boolean(result.duplicate)}})); }
   catch (error) { notify(error.message, true); }
-  finally { busy = false; document.body.removeAttribute('aria-busy'); buttons.forEach(b => { if (b.isConnected) { b.disabled = b.dataset.wasDisabled === 'true'; delete b.dataset.wasDisabled; } }); }
+  finally { busy = false; if(stateDirty&&state)render(); document.body.removeAttribute('aria-busy'); buttons.forEach(b => { if (b.isConnected) { b.disabled = b.dataset.wasDisabled === 'true'; delete b.dataset.wasDisabled; } }); }
 }
 async function load() {
   $('#loading').hidden = false; $('#load-error').hidden = true;
@@ -36,8 +34,10 @@ async function load() {
   finally { $('#loading').hidden = true; }
 }
 function render() {
+  const drafts=hasRendered?rememberDrafts():null;
   if (!state.cases.some(c => c.id === selectedCaseId)) selectedCaseId = state.cases.at(-1)?.id;
   renderStats(); renderTiles(); renderQueue(); renderCase(); renderSelects(); renderNeeds(); renderMessages(); renderAudit();
+  restoreDrafts(document,drafts);hasRendered=true;stateDirty=false;
   document.dispatchEvent(new CustomEvent('family-state-changed', {detail:state}));
 }
 function renderStats() {
@@ -65,7 +65,8 @@ function renderQueue() {
   $('#case-list').replaceChildren(...(nodes.length ? nodes : [empty('No cases yet. Create a fictional family report below.')]));
 }
 function renderCase() {
-  const root = $('#case-detail'); const c = state.cases.find(c => c.id === selectedCaseId); root.replaceChildren();
+  const root = $('#case-detail'); rememberProposalState(root); const c = state.cases.find(c => c.id === selectedCaseId); root.replaceChildren();
+  root.dataset.caseId=c?.id||'';
   if (!c) { root.append(empty('Select or create a case to review its evidence.')); return; }
   const title = el('div','case-title'); const heading = el('div'); heading.append(el('div','eyebrow',`${c.id} / FAMILY INQUIRY`),el('h2','',names(c.subjectNames))); title.append(heading,tag(label(c.reviewState),c.reviewState==='resolved'?'teal':'amber')); root.append(title,el('p','fine-print','Original inquiry'),el('p','case-description',c.description));
   root.append(el('p','fine-print',`Last known: ${c.lastKnownTile} · Last contact: ${formatTime(c.lastContactAt)} · Search: ${c.searchTiles.join(', ') || 'no tiles'}`));
@@ -78,8 +79,9 @@ function renderCase() {
   const verificationForm=el('form'); verificationForm.id='verify-form';
   const evidenceList=el('div','evidence-list');
   reports.forEach(r=>{
-    const card=el('label','evidence'); const head=el('div','evidence-header'); const select=el('span'); const check=el('input'); check.type='checkbox'; check.name='evidenceIds'; check.value=r.id; check.disabled=Boolean(c.verification); select.append(check,document.createTextNode(`${r.id} · ${person(r.senderId)}`)); head.append(select,tag(r.processingState==='needs_review'?'Needs review':'Reported, not verified', 'amber')); card.append(head,el('p','evidence-text',r.text),el('small','',`Observed ${formatTime(r.observedAt)} · ${label(r.processingPath)}`));
+    const card=el('article','evidence'); const head=el('div','evidence-header'); const select=el('label','evidence-select'); const check=el('input'); check.type='checkbox'; check.name='evidenceIds'; check.value=r.id; check.disabled=Boolean(c.verification)||Boolean(r.modelReview&&r.modelReview.status!=='accepted'); select.append(check,document.createTextNode(`${r.id} · ${person(r.senderId)}`)); head.append(select,tag(r.processingState==='needs_review'?'Needs review':'Reported, not verified', 'amber')); card.append(head,el('p','evidence-text',r.text),el('small','',`Observed ${formatTime(r.observedAt)} · ${label(r.processingPath)}`));
     (r.observations || []).forEach(o=>{ const observation=el('div','observation'); observation.append(el('strong','',label(o.type)),el('p','',o.summary)); if(o.sourceSpan) observation.append(el('p','',`Source: “${o.sourceSpan}”`)); card.append(observation); });
+    const proposal=createProposalView(r);if(proposal)card.append(proposal);
     if(r.reviewFlags?.length) card.append(el('p','review-flag',`Review flags: ${r.reviewFlags.map(label).join(' · ')}`)); evidenceList.append(card);
   });
   if(!reports.length) evidenceList.append(empty('No evidence received. The case remains open. Silence is not a safety signal.'));
@@ -90,8 +92,8 @@ function renderCase() {
     const box=el('div','verification'); box.append(el('h3','','Officer verification'),el('p','panel-intro','Demo officer role. Select supporting reports and record an actual fictional verification basis. A neighbor’s sighting alone does not establish safety.'));
     const noteLabel=el('label','','Verification basis'); const note=el('textarea'); note.name='note'; note.rows=3; note.required=true; note.minLength=20; note.maxLength=1500; note.placeholder='Describe the fictional responder check-in and how location and welfare were confirmed.'; noteLabel.append(note);
     const welfareLabel=el('label','','Verified welfare outcome'); const welfare=el('select'); welfare.name='welfare'; [['assistance_needed','Located; assistance needed'],['confirmed_safe','Confirmed safe']].forEach(([value,text])=>{const option=el('option','',text);option.value=value;welfare.append(option);}); welfareLabel.append(welfare);
-    const submit=el('button','button primary','Verify outcome & stop inquiry'); submit.type='submit';submit.disabled=!reports.length;
-    box.append(noteLabel,welfareLabel,el('p','fine-print','Recorded as Officer Rivera (demo). Resolves the inquiry, not assistance tasks.'),submit); verificationForm.append(box);
+    const submit=el('button','button primary','Verify outcome & stop inquiry'); submit.type='submit';submit.disabled=!reports.some(report=>(!report.modelReview||report.modelReview.status==='accepted')&&report.observations.some(observation=>observation.type==='sighting'));
+    box.append(noteLabel,welfareLabel,el('p','fine-print',submit.disabled?'A reviewed sighting and a direct confirmation basis are needed before verification. Unaccepted suggestions cannot verify welfare.':'Recorded as Officer Rivera (demo). Resolves the inquiry, not assistance tasks.'),submit); verificationForm.append(box);
     verificationForm.addEventListener('submit',event=>{event.preventDefault(); const data=new FormData(verificationForm); const evidenceIds=data.getAll('evidenceIds'); if(!evidenceIds.length){notify('Select at least one supporting evidence report before verifying.',true);return;} mutate(`/api/cases/${encodeURIComponent(c.id)}/verify`,{officerName:'Officer Rivera (demo)',evidenceIds,note:String(data.get('note')).trim(),welfare:data.get('welfare'),resolve:true},'Officer review recorded. Inquiry stopped; outstanding assistance is still tracked separately.');}); root.append(verificationForm);
   }
 }
@@ -112,6 +114,11 @@ function renderAudit() {
 $('#case-form').addEventListener('submit',event=>{event.preventDefault();const data=new FormData(event.currentTarget);const searchTiles=data.getAll('searchTiles');if(!searchTiles.length){notify('Choose at least one outreach tile.',true);return;}mutate('/api/cases',{subjectNames:String(data.get('subjectNames')).trim(),description:String(data.get('description')).trim(),reporterId:'mom',lastKnownTile:data.get('lastKnownTile'),lastContactAt:new Date(data.get('lastContactAt')+'Z').toISOString(),searchTiles,consentToOutreach:data.get('consentToOutreach')==='on'},'Family case created. Review the policy status before queuing simulated outreach.',result=>{selectedCaseId=result.caseId||state.cases.at(-1)?.id;$('#sms-case').value=selectedCaseId;});});
 $('#sms-form').addEventListener('submit',event=>{event.preventDefault();const data=new FormData(event.currentTarget);mutate('/api/reports',{providerEventId:String(data.get('providerEventId')).trim(),senderId:data.get('senderId'),caseId:data.get('caseId'),text:String(data.get('text')).trim(),observedAt:data.get('observedAt')?new Date(data.get('observedAt')+'Z').toISOString():null,simulateFailure:data.get('simulateFailure')==='on'},'Simulated SMS processed. Review the evidence and processing status; no safety outcome is inferred.',()=>{selectedCaseId=data.get('caseId');});});
 $('#example').addEventListener('click',()=>{const form=$('#case-form');form.elements.subjectNames.value='Rosa and Miguel Santos';form.elements.description.value='Mom is looking for her parents, Rosa and Miguel Santos. Last contact was before the road closures. Please ask nearby opted-in neighbors for a recent sighting.';form.elements.lastKnownTile.value='A1';form.elements.lastContactAt.value='2026-11-07T12:00';$$('input[name=searchTiles]',form).forEach(c=>c.checked=c.value==='A1');form.elements.consentToOutreach.checked=true;const sms=$('#sms-form');sms.elements.text.value='I saw Rosa and Miguel at Oak School. They need water for two people and the road is blocked.';sms.elements.senderId.value='neighbor-1';sms.elements.observedAt.value='2026-11-07T14:20';sms.elements.providerEventId.value=`demo-sms-${String(state.reports.length+1).padStart(3,'0')}`;sms.elements.simulateFailure.checked=false;notify('Grandparents example filled in. Create the family case below, then queue outreach and receive the SMS.');$('#family').scrollIntoView({behavior:'smooth',block:'start'});form.elements.subjectNames.focus({preventScroll:true});});
+stateClient.subscribe(next=>{
+  state=next;stateDirty=true;
+  if(!busy){render();$('#workspace').hidden=false;$('#loading').hidden=true;$('#load-error').hidden=true;}
+});
+stateClient.connect();
 let resetTrigger = null;
 function resetDemo(event) {
   resetTrigger = event.currentTarget;

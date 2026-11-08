@@ -1,3 +1,5 @@
+import {stateClient} from './state-client.js';
+import {createProposalView,clearProposalMemory,rememberProposalState} from './proposal-view.js';
 import {node,button,icon,iconButton,title,count} from './ui.js';
 import {searchPeople,messageThreads,caseEvents,outgoingForParticipant,searchSegments,messageHitIds,normalize,latestReceivedReport,incomingReportKind} from './records.js';
 import {recordFocusKey,rememberRecordFocus,restoreRecordFocus,viewportRecordFocus} from './record-focus.js';
@@ -50,7 +52,7 @@ function route(){
     const element=$('#'+id);
     if(!element.hidden&&name!==view){
       const root=element.querySelector('#people-workspace, #messages-workspace');
-      if(root){rememberReading(root);rememberList(root,root.id==='people-workspace'?'.people-list':'.thread-list');for(const pane of root.querySelectorAll('[data-reading-ready]'))pane.dataset.readingReady='false';}
+      if(root){rememberProposalState(root);rememberReading(root);rememberList(root,root.id==='people-workspace'?'.people-list':'.thread-list');for(const pane of root.querySelectorAll('[data-reading-ready]'))pane.dataset.readingReady='false';}
     }
     element.hidden=name!==view;
   }
@@ -186,7 +188,7 @@ function restoreList(list,memory){
   if(memory.focus){const row=[...list.querySelectorAll('[data-record-id]')].find(e=>e.dataset.recordId===memory.focus);row?.focus({preventScroll:true});}
 }
 function renderPeople(queryChanged=false,focusOverride=null){
-  const root=$('#people-workspace'),focus=focusOverride||rememberRecordFocus(root);
+  const root=$('#people-workspace'),focus=focusOverride||rememberRecordFocus(root);rememberProposalState(root);
   const restoreFocus=()=>restoreRecordFocus(root,focus,{reveal:revealRecordFocus});
   if(!familyState){root.replaceChildren();recordsFeedback(root);restoreFocus();return;}
   const memory=rememberList(root,'.people-list'),query=$('#person-search').value;rememberReading(root);
@@ -221,6 +223,7 @@ function renderPeople(queryChanged=false,focusOverride=null){
     preview.append(node('p','workspace-note',`Received ${time(report.receivedAt)} · Observed ${time(report.observedAt)}`));
     const label=report.reviewFlags?.includes('correction_or_negation')?'Correction or negation · needs review':incomingReportKind(report);
     preview.append(pill(label,report.processingState==='needs_review'?'amber':''),node('p','workspace-note',report.processingPath==='failed'?'Raw text · interpretation unavailable. Human review is needed.':'Raw message · does not independently establish location or welfare.'),reportLink(report,'latest-report:'+report.id,'Open full message'));
+    const proposal=createProposalView(report,{query});if(proposal)preview.append(proposal);
     record.append(preview);
   }
   if(p.participantId)record.append(highlighted('p','record-description',p.description,query));
@@ -256,7 +259,7 @@ function renderPeople(queryChanged=false,focusOverride=null){
   layout.append(list,record);root.append(layout);restoreList(list,memory);restoreReading(root);restoreFocus();
 }
 function renderMessages(queryChanged=false,selectionChanged=false,focusOverride=null){
-  const root=$('#messages-workspace'),focus=focusOverride||rememberRecordFocus(root);
+  const root=$('#messages-workspace'),focus=focusOverride||rememberRecordFocus(root);rememberProposalState(root);
   const restoreFocus=()=>restoreRecordFocus(root,focus,{reveal:revealRecordFocus});
   if(!familyState){root.replaceChildren();recordsFeedback(root);restoreFocus();return false;}
   const oldThreadId=root.querySelector('.conversation')?.dataset.threadId;
@@ -269,7 +272,7 @@ function renderMessages(queryChanged=false,selectionChanged=false,focusOverride=
   const layout=node('div','messages-layout'+(threadOpen?' is-detail':'')),list=node('div','thread-list');list.setAttribute('aria-label','Case conversations');
   for(const c of threads){
     const b=button('',()=>{selectedThread=c.id;threadOpen=true;const jumped=renderMessages(false,true);if(mobile()){if(jumped)readingParts(root).detail?.focus({preventScroll:true});else revealMobileDetail(root);}},'thread-row');b.dataset.recordId=c.id;b.setAttribute('aria-pressed',String(selectedThread===c.id));
-    const head=node('span','thread-row-heading');head.append(highlighted('strong','',subjectName(c),query),node('span','thread-event-count',count(c.events.length)));b.append(head,highlighted('small','',`${c.id==='unassigned'?'Human review':c.id} · ${title(c.reviewState)}`,query));
+    const head=node('span','thread-row-heading');head.append(highlighted('strong','',subjectName(c),query),node('span','thread-event-count',count(c.events.length)));b.append(head,highlighted('small','',`${c.id==='unassigned'?'Human review':c.id} · ${c.pendingInboxCount?'Incoming report needs review':title(c.reviewState)}`,query));
     const hits=normalize(query)?messageHitIds(c.events,query):null,previewId=hits?.fullIds[0]||hits?.relatedIds[0];
     const preview=previewId?c.events.find(e=>e.id===previewId):c.events.at(-1);
     b.append(highlighted('p','thread-preview',preview?preview.text:'No messages received. Follow-up is still needed.',query));list.append(b);
@@ -278,12 +281,12 @@ function renderMessages(queryChanged=false,selectionChanged=false,focusOverride=
   activeMessageSearch=messageSearchState(c,query,queryChanged);
   if(activeMessageSearch?.ids.length&&(queryChanged||selectionChanged||oldThreadId!==c.id||!activeMessageSearch.hadSearch))pendingMessageJumps.add(activeMessageSearch.key);
   const context=node('div','conversation-context');
-  const head=node('div','conversation-heading'),copy=node('div'),back=button('',()=>{threadOpen=false;renderMessages();focusRecordRow(root,selectedThread);},'mobile-record-back icon-button');recordFocusKey(back,'back');back.setAttribute('aria-label','Back to conversations');back.append(icon('chevron'));copy.append(highlighted('h2','',subjectName(c),query),node('p','',`${c.id==='unassigned'?'Unassigned reports':c.id+' · Oak District'} · ${c.events.length} ${c.events.length===1?'message':'messages'}`));recordFocusKey(copy.querySelector('h2'),'heading').tabIndex=-1;head.append(back,copy,pill(c.reviewState==='resolved'?'Reviewed':c.id==='unassigned'?'Needs clarification':'Follow-up',c.reviewState==='resolved'?'green':'amber'));context.append(head);
+  const head=node('div','conversation-heading'),copy=node('div'),back=button('',()=>{threadOpen=false;renderMessages();focusRecordRow(root,selectedThread);},'mobile-record-back icon-button');recordFocusKey(back,'back');back.setAttribute('aria-label','Back to conversations');back.append(icon('chevron'));copy.append(highlighted('h2','',subjectName(c),query),node('p','',`${c.id==='unassigned'?'Unassigned reports':c.id+' · Oak District'} · ${c.events.length} ${c.events.length===1?'message':'messages'}`));recordFocusKey(copy.querySelector('h2'),'heading').tabIndex=-1;head.append(back,copy,pill(c.pendingInboxCount?'Incoming review':c.reviewState==='resolved'?'Reviewed':c.id==='unassigned'?'Needs clarification':'Follow-up',c.reviewState==='resolved'&&!c.pendingInboxCount?'green':'amber'));context.append(head);
   if(activeMessageSearch)context.append(messageMatchbar(activeMessageSearch));conversation.append(context);
   const body=node('div','conversation-events');let lastDay='';
   for(const e of c.events){const eventDay=time(e.receivedAt||e.at).split(',')[0];if(eventDay!==lastDay){body.append(node('div','conversation-date',eventDay));lastDay=eventDay;}
     const bubble=node('article',`message-bubble ${e.direction}`);bubble.dataset.messageId=e.id;bubble.tabIndex=-1;
-    bubble.append(highlighted('strong','',`${e.direction==='incoming'?'From':'To'} ${e.name}`,query),highlighted('p','',e.text,query),highlighted('span','message-kind',`${e.direction==='incoming'?'Reported · ': 'Simulated · '}${title(e.kind)}`,query),node('small','',`${e.direction==='incoming'?'Observed':'Queued'} ${time(e.at)}${e.receivedAt?' · received '+time(e.receivedAt):''}`));body.append(bubble);
+    bubble.append(highlighted('strong','',`${e.direction==='incoming'?'From':'To'} ${e.name}`,query),highlighted('p','',e.text,query),highlighted('span','message-kind',`${e.direction==='incoming'?'Reported · ': 'Simulated · '}${title(e.kind)}`,query),node('small','',`${e.direction==='incoming'?'Observed':'Queued'} ${time(e.at)}${e.receivedAt?' · received '+time(e.receivedAt):''}`));const proposal=e.report?createProposalView(e.report,{query}):null;if(proposal)bubble.append(proposal);body.append(bubble);
   }
   if(!c.events.length)body.append(emptyState('Waiting for the first message','This case remains open. Queue an inquiry or simulate an incoming report in Casework.',recordFocusKey(button('Open Casework',()=>{location.hash='casework';},'control'),'casework')));
   conversation.append(body);const foot=node('div','conversation-footer');foot.append(node('span','',c.id==='unassigned'?'These raw reports have no established case. Keep them in human review.':'Local simulation · no external messages are sent.'));
@@ -295,28 +298,22 @@ function focusCaseReview(){
   const heading=$('#case-detail h2')||$('#casework h2');
   if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});heading.scrollIntoView({block:'nearest'});}
 }
-document.addEventListener('family-state-changed',e=>{
-  stateRevision++;familyState=e.detail;recordsLoading=false;recordsLoadError='';renderPeople();renderMessages();
-});
+stateClient.subscribe(next=>{stateRevision++;familyState=next;recordsLoading=false;recordsLoadError='';renderPeople();renderMessages();});
 document.addEventListener('family-action-complete',e=>{
-  if(e.detail.path==='/api/reset'){personReading.clear();threadReading.clear();listReading.clear();expandedHistories.clear();messageMatchPositions.clear();messageSearchSeen.clear();pendingMessageJumps.clear();activeMessageSearch=null;return;}
+  if(e.detail.path==='/api/reset'){clearProposalMemory();personReading.clear();threadReading.clear();listReading.clear();expandedHistories.clear();messageMatchPositions.clear();messageSearchSeen.clear();pendingMessageJumps.clear();activeMessageSearch=null;return;}
   if(e.detail.duplicate)return;
   if((e.detail.path==='/api/cases'&&location.hash==='#family')||(e.detail.path==='/api/reports'&&location.hash==='#simulator')){
     location.hash='casework';route();requestAnimationFrame(focusCaseReview);
   }
 });
 async function refreshState(){
-  const requestId=++stateRequest,revision=stateRevision;
+  const requestId=++stateRequest;
   recordsLoading=true;recordsLoadError='';renderPeople();renderMessages();
-  try{
-    const r=await fetch('/api/state');if(!r.ok)throw new Error('Case records could not be loaded.');
-    let next;try{next=await r.json();}catch{throw new Error('Case records returned unreadable data. Try again.');}
-    if(!['cases','participants','reports','outbox','assistance'].every(key=>Array.isArray(next?.[key])))throw new Error('Case records are incomplete. Try again.');
-    if(requestId!==stateRequest||revision!==stateRevision)return;
-    familyState=next;
-  }catch(e){if(requestId===stateRequest&&revision===stateRevision)recordsLoadError=e.message;}
-  finally{if(requestId===stateRequest&&revision===stateRevision){recordsLoading=false;renderPeople();renderMessages();}}
+  try{await stateClient.refresh();}
+  catch(error){if(requestId===stateRequest&&!familyState)recordsLoadError=error.message;}
+  finally{if(requestId===stateRequest){recordsLoading=false;renderPeople();renderMessages();}}
 }
+
 $('#person-search').addEventListener('input',()=>{personOpen=false;renderPeople(true);announceSearch($('#people-workspace .results-count')?.textContent||'No matching records.');});$('#message-search').addEventListener('input',()=>{threadOpen=false;renderMessages(true);announceSearch($('#messages-workspace .results-count')?.textContent||'No matching conversations.');});window.addEventListener('hashchange',route);$('#fill-example').addEventListener('click',()=>{location.hash='family';route();$('#example').click();});for(const el of document.querySelectorAll('[data-icon]'))el.replaceChildren(icon(el.dataset.icon));searchControls();route();refreshState();
 
 for(const id of ['people','messages'])$('#'+id+'-view').addEventListener('scroll',()=>{const root=$('#'+id+'-workspace');rememberReading(root);rememberList(root,id==='people'?'.people-list':'.thread-list');},{passive:true});

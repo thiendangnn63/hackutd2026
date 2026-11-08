@@ -249,3 +249,30 @@ test('message events use distinct incoming command kinds while preserving the co
   assert.equal(events[0].report,state.reports[0]);assert.equal(events[0].text,'STOP');assert.equal(events[1].text,'CHECKIN');
   assert.deepEqual(state,before);assert.equal(state.cases[0].welfareState,'unknown');assert.equal(state.cases[0].locationState,'unknown');
 });
+
+
+test('a resolved conversation retains incoming proposal review without changing its welfare or assistance',async()=>{
+  const {captureRawReport,claimReportJob,completeReportJob}=await import('../src/report-inbox.js');
+  const {verifyCase}=await import('../src/domain.js');
+  const {state,caseId}=story(),item=state.cases.find(c=>c.id===caseId);
+  verifyCase(state,caseId,{officerName:'Officer Rivera (demo)',evidenceIds:[state.reports[0].id],note:'During the fictional exercise both named people were directly checked and their identities confirmed.',welfare:'assistance_needed',resolve:true});
+  const before={cases:structuredClone(state.cases),assistance:structuredClone(state.assistance),outbox:structuredClone(state.outbox)};
+  const raw=captureRawReport(state,{dataClass:'synthetic',provider:'fixture',projectId:'review-demo',messageId:'new-raw',senderId:'neighbor-1',caseId,text:'I saw Rosa and Miguel at Oak School.'});
+  let thread=messageThreads(state,'','follow_up').find(c=>c.id===caseId);assert.equal(thread.pendingInboxCount,1);assert.equal(thread.reviewState,'resolved');
+  const job=claimReportJob(state,{reportId:raw.reportId});
+  completeReportJob(state,{...job,proposal:{observations:[{type:'sighting',sourceSpan:'I saw Rosa and Miguel at Oak School',quantity:null,location:'Oak School'}],reviewFlags:[]}});
+  thread=messageThreads(state,'','follow_up').find(c=>c.id===caseId);assert.equal(thread.pendingInboxCount,1);
+  assert.equal(thread.events.find(e=>e.id===raw.reportId).kind,'Suggested observations · needs review');
+  assert.deepEqual(state.reports.find(r=>r.id===raw.reportId).observations,[]);
+  assert.deepEqual({cases:state.cases,assistance:state.assistance,outbox:state.outbox},before);
+});
+
+test('an opt-out command does not reopen a resolved conversation, but enrollment review stays visible',async()=>{
+  const {captureRawReport}=await import('../src/report-inbox.js');const {state,caseId}=story();
+  const item=state.cases.find(c=>c.id===caseId);item.reviewState='resolved';item.welfareState='confirmed_safe';item.outreachState='stopped';
+  captureRawReport(state,{dataClass:'synthetic',provider:'fixture',projectId:'review-demo',messageId:'stop',senderId:'neighbor-1',caseId,text:'STOP'});
+  assert.equal(messageThreads(state,'','follow_up').some(c=>c.id===caseId),false);
+  captureRawReport(state,{dataClass:'synthetic',provider:'fixture',projectId:'review-demo',messageId:'enroll',senderId:'neighbor-1',caseId,text:'CHECKIN'});
+  assert.equal(messageThreads(state,'','follow_up').find(c=>c.id===caseId).pendingInboxCount,1);
+  assert.equal(item.welfareState,'confirmed_safe');assert.equal(item.outreachState,'stopped');assert.equal(state.participants.find(p=>p.id==='neighbor-1').optedIn,false);
+});

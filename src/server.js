@@ -7,6 +7,7 @@ import { Store } from './store.js';
 import { SatelliteService } from './satellite.js';
 import { HoustonService } from './houston-service.js';
 import {historicalImagery,historicalImageFile} from './historical-imagery.js';
+import { publicState } from './public-state.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const files = {
@@ -25,6 +26,9 @@ const files = {
   '/data/houston-observation-coverage.json': ['data/houston-observation-coverage.json', 'application/json'],
   '/ui.js': ['ui.js', 'text/javascript'],
   '/records.js': ['records.js', 'text/javascript'],
+  '/state-client.js': ['state-client.js', 'text/javascript'],
+  '/proposal-view.js': ['proposal-view.js', 'text/javascript'],
+  '/form-drafts.js': ['form-drafts.js', 'text/javascript'],
   '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
   '/beacon-logo.svg': ['beacon-logo.svg', 'image/svg+xml'],
   '/workspace.js': ['workspace.js', 'text/javascript'],
@@ -53,6 +57,56 @@ async function body(req) {
     return value;
   } catch { throw new InputError('Expected a JSON object.'); }
 }
+// A slow reader retains only the latest pending snapshot. The frame that made
+// write() return false is already buffered and must not be sent again on drain.
+export function openStateStream(res, store, { heartbeatMs = 15_000, backpressureMs = 30_000 } = {}) {
+  let closed = false, blocked = false, pending = null, heartbeat, pressureTimer;
+  let unsubscribe = () => {};
+  const cleanup = () => {
+    if (closed) return;
+    closed = true; pending = null; unsubscribe();
+    clearInterval(heartbeat); clearTimeout(pressureTimer);
+    res.off('close', cleanup); res.off('error', close); res.off('drain', drain);
+  };
+  const close = () => { cleanup(); if (!res.destroyed) res.destroy(); };
+  const write = frame => {
+    try {
+      if (!res.write(frame)) {
+        blocked = true;
+        pressureTimer = setTimeout(close, backpressureMs); pressureTimer.unref?.();
+      }
+    } catch { close(); }
+  };
+  const send = snapshot => {
+    if (closed) return;
+    if (blocked) { pending = snapshot; return; }
+    try { write(`id: ${snapshot.sessionId}:${snapshot.revision}\ndata: ${JSON.stringify({ ...snapshot, state: publicState(snapshot.state) })}\n\n`); }
+    catch { close(); }
+  };
+  const drain = () => {
+    if (closed) return;
+    blocked = false; clearTimeout(pressureTimer);
+    const latest = pending; pending = null;
+    if (latest) send(latest);
+  };
+  res.on('close', cleanup); res.on('error', close); res.on('drain', drain);
+  // No asynchronous boundary occurs between subscription and initial read.
+  unsubscribe = store.onChange(send);
+  const snapshot = store.readVersioned();
+  try {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8', 'Connection': 'keep-alive',
+      'X-Beacon-Session': snapshot.sessionId, 'X-Beacon-Revision': String(snapshot.revision),
+    });
+    res.flushHeaders?.(); send(snapshot);
+  } catch { close(); }
+  if (!closed) {
+    heartbeat = setInterval(() => { if (!closed && !blocked) write(': heartbeat\n\n'); }, heartbeatMs);
+    heartbeat.unref?.();
+  }
+  return cleanup;
+}
+
 export function createApp(store = new Store(resolve(root, '.data/state.json')), satellite = new SatelliteService(root), houston = new HoustonService(root)) {
   return createServer(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -60,13 +114,23 @@ export function createApp(store = new Store(resolve(root, '.data/state.json')), 
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'");
     const json = (status, data) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(data)); };
+    const stateJson = (status, data) => {
+      const version = store.version;
+      res.setHeader('X-Beacon-Session', version.sessionId);
+      res.setHeader('X-Beacon-Revision', String(version.revision));
+      return json(status, publicState(data));
+    };
     try {
       const port = req.socket.localPort;
       const allowedHosts = [`127.0.0.1:${port}`, `localhost:${port}`];
       if (!allowedHosts.includes(req.headers.host)) throw new InputError('Loopback host required.', 403);
       if (req.headers.origin && !allowedHosts.map((host) => `http://${host}`).includes(req.headers.origin)) throw new InputError('Cross-origin access is disabled.', 403);
       const url = new URL(req.url, `http://${req.headers.host}`);
-      if (req.method === 'GET' && url.pathname === '/api/state') return json(200, store.read());
+      if (req.method === 'GET' && url.pathname === '/api/state') return stateJson(200, store.read());
+      if (req.method === 'GET' && url.pathname === '/api/events') {
+        if (url.search) throw new InputError('Unsupported state stream option.');
+        openStateStream(res, store); return;
+      }
       if (req.method === 'GET' && url.pathname === '/api/health') return json(200, { ok: true, mode: 'simulation', liveSendingEnabled: false });
       if (req.method === 'GET' && url.pathname === '/api/houston/imagery') {
         if(url.search)throw new InputError('Unsupported imagery option.');
@@ -97,13 +161,13 @@ export function createApp(store = new Store(resolve(root, '.data/state.json')), 
         if (!req.headers.origin) throw new InputError('Same-origin requests are required for mutations.', 403);
         const input = await body(req);
         if (url.pathname === '/api/satellite/infer') return json(200, await satellite.infer(input));
-        if (url.pathname === '/api/cases') return json(201, store.act(openCase, input));
-        if (url.pathname === '/api/reports') return json(200, store.act(receiveReport, input));
-        if (url.pathname === '/api/reset') return json(200, store.reset());
+        if (url.pathname === '/api/cases') return stateJson(201, store.act(openCase, input));
+        if (url.pathname === '/api/reports') return stateJson(200, store.act(receiveReport, input));
+        if (url.pathname === '/api/reset') return stateJson(200, store.reset());
         const caseAction = url.pathname.match(/^\/api\/cases\/(C\d+)\/(outreach|verify)$/);
-        if (caseAction) return json(200, store.act(caseAction[2] === 'outreach' ? sendOutreach : verifyCase, caseAction[1], input));
+        if (caseAction) return stateJson(200, store.act(caseAction[2] === 'outreach' ? sendOutreach : verifyCase, caseAction[1], input));
         const consent = url.pathname.match(/^\/api\/participants\/([a-z0-9-]+)\/consent$/);
-        if (consent) return json(200, store.act(setConsent, consent[1], input));
+        if (consent) return stateJson(200, store.act(setConsent, consent[1], input));
       }
       if (req.method === 'GET' && files[url.pathname]) {
         const [filename, type] = files[url.pathname];

@@ -22,10 +22,13 @@ export function latestReceivedReport(reports) {
   return { report: reports[latest], receiptOrderKnown: true };
 }
 
+export const inboxNeedsReview=report=>Boolean(report?.modelReview&&!['accepted','dismissed','command_processed'].includes(report.modelReview.status));
+
 export function incomingReportKind(report) {
   const command = typeof report.text === 'string' ? report.text.trim().toUpperCase() : '';
   if (report.processingPath === 'deterministic' && command === 'STOP') return 'Opt-out command';
   if (report.processingPath === 'deterministic' && command === 'CHECKIN') return 'Enrollment request';
+  if(inboxNeedsReview(report))return ['queued','running'].includes(report.modelReview.status)?'Awaiting interpretation':report.modelReview.status==='proposal_ready'?'Suggested observations · needs review':'Needs review';
   return report.processingPath === 'failed' || report.processingState === 'needs_review' ? 'Needs review' : 'Reported observation';
 }
 
@@ -117,14 +120,14 @@ export function searchPeople(state, query = '', scope = 'all') {
 }
 
 export function messageThreads(state, query = '', scope = 'all') {
-  const threads = state.cases.map(c => ({ ...c, events: caseEvents(state, c.id) }));
+  const threads = state.cases.map(c => {const events=caseEvents(state,c.id);return {...c,events,pendingInboxCount:events.filter(event=>event.direction==='incoming'&&inboxNeedsReview(event.report)).length};});
   const unassigned = caseEvents(state, 'unassigned');
   if (unassigned.length) threads.push({
     id: 'unassigned', subjectNames: 'Unassigned reports', reviewState: 'needs_clarification',
     description: 'Reports without an existing case association. Review the original case references before assigning them.',
     events: unassigned,
   });
-  return threads.filter(c => scope !== 'follow_up' || c.reviewState !== 'resolved')
+  return threads.filter(c => scope !== 'follow_up' || c.reviewState !== 'resolved'||c.pendingInboxCount>0)
     .filter(c => matches(caseSearchText(state, c), query));
 }
 

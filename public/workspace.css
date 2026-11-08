@@ -606,3 +606,16 @@ input[type=checkbox],input[type=range]{accent-color:var(--blue)}
 .original-inquiry .record-description{margin:0 0 6px}
 .report-message-link{min-height:36px;font-size:11px;margin-top:4px}
 @media(max-width:760px),(max-height:520px){.report-message-link{min-height:44px}}
+
+.proposal-review{margin-top:13px;padding-top:12px;border-top:1px solid var(--line);overflow-wrap:anywhere}
+.proposal-state{font-size:11px!important;font-weight:600;margin:0 0 7px!important;color:var(--amber)!important}
+.proposal-review>.workspace-note{font-size:10px!important;line-height:1.7;margin:7px 0!important}
+.proposal-details>summary{cursor:pointer;font-size:11px;min-height:36px;padding:9px 0;color:var(--blue)}
+.proposal-observation{padding:12px 0;border-top:1px solid var(--line)}
+.proposal-observation strong{font-size:11px;color:var(--ink)}
+.proposal-observation p{font-size:11px;line-height:1.75;margin:7px 0}
+.proposal-observation blockquote{font-size:11px;line-height:1.75;margin:9px 0;padding:0 0 0 12px;border-left:2px solid var(--line)}
+.proposal-observation small{font-size:9px;color:var(--muted)}
+@media(max-width:760px),(max-height:520px){.proposal-details>summary{min-height:44px}}
+
+.evidence-select{display:inline-flex;flex-direction:row;align-items:center;gap:7px;min-height:44px;margin:0;font-size:11px}
