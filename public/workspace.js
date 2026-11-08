@@ -97,12 +97,14 @@ function jumpToMessageMatch(){
   return true;
 }
 function navigateMessageMatch(direction){
-  if(!activeMessageSearch?.ids.length)return false;
+  if(!activeMessageSearch)return false;
   if(mobile()&&!threadOpen){
-    threadOpen=true;renderMessages(false,true);
+    threadOpen=true;const jumped=renderMessages(false,true);
+    if(!jumped)revealMobileDetail($('#messages-workspace'));
     if(direction<0&&activeMessageSearch?.ids.length){activeMessageSearch.index=activeMessageSearch.ids.length-1;jumpToMessageMatch();}
     return true;
   }
+  if(!activeMessageSearch.ids.length)return false;
   const state=activeMessageSearch;state.index=(state.index+direction+state.ids.length)%state.ids.length;
   return jumpToMessageMatch();
 }

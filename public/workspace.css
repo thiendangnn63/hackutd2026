@@ -569,3 +569,20 @@ input[type=checkbox],input[type=range]{accent-color:var(--blue)}
  .map-resolution:has(.map-observation:not([hidden])) .area-resolution{display:none}
  .map-observation{gap:2px;padding-top:5px;margin-top:2px}
 }
+
+/* Keep priority areas visible; disclose secondary map controls on demand. */
+.map-filters{margin-top:8px;border-top:1px solid var(--line)}
+.map-filters>summary{display:flex;align-items:center;gap:8px;min-height:44px;list-style:none;cursor:pointer;font-size:11px}
+.map-filters>summary::-webkit-details-marker{display:none}
+.map-filter-summary{margin-left:auto;text-align:right;font-size:10px;color:var(--muted);line-height:1.5}
+.map-filters[data-active=true] .map-filter-summary{color:var(--blue)}
+.map-filters>summary svg{width:13px;height:13px;color:var(--muted)}
+.map-filters[open]>summary svg{transform:rotate(180deg)}
+.map-filter-controls{display:grid;gap:10px;padding:4px 0 6px}
+.map-filter-controls .scenario-select,.map-filter-controls .resource-options{margin-top:0}
+.map-filter-controls .resource-options{gap:4px 12px}
+.map-filter-controls .resource-options label{min-height:32px}
+
+@media(max-width:760px),(max-height:520px){
+ .map-workspace.panel-open #show-flooding,.map-workspace.panel-open .map-zoom-controls,.map-workspace.panel-open .map-fit,.map-workspace.panel-open .map-compass,.map-workspace.panel-open .map-legend-card,.map-workspace.panel-open .map-resolution{display:none}
+}

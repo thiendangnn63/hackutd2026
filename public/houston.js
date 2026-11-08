@@ -20,7 +20,8 @@ const observationView=createObservationView($('#map-observation'),{
   onLayout(){if(svg)requestAnimationFrame(()=>setCamera(camera,cameraFitted));}
 });
 const pointers=new Map(),detail=$('#map-detail'),tooltip=$('#map-tooltip');
-const mobile=()=>window.matchMedia('(max-width:760px), (max-height:520px)').matches;
+const compactMapLayout=window.matchMedia('(max-width:760px), (max-height:520px)');
+const mobile=()=>compactMapLayout.matches;
 const sidebarWidth=()=>mobile()||frame.classList.contains('overview-collapsed')?0:document.querySelector('#operations-panel').getBoundingClientRect().right-frame.getBoundingClientRect().left+20;
 const parentHospitality=r=>cells.get(`${r.id}:0`)?.[0]?.hospitality||hospitalityFixture(`${r.id}/0/0/0`);
 function revealDetail(){detail.hidden=false;if(mobile()){frame.classList.remove('panel-open');$('#mobile-panel-toggle').setAttribute('aria-expanded','false');}}
@@ -244,7 +245,15 @@ function renderTiles(){
 function renderMetrics(){
   const metrics=$('#map-metrics');metrics.replaceChildren();for(const [value,label,tone] of [[data.stats.openRequests,'Open requests',''],[data.stats.coverageChecks,'Coverage checks',''],[data.stats.urgentRequests,'Urgent cases','metric-alert']]){const e=node('div',tone);e.append(node('strong','',count(value)),node('small','',label));metrics.append(e);}$('#coverage-count').textContent=data.stats.coverageChecks;document.querySelector('.operations-heading p').textContent=`${data.regions.length} coverage areas · Houston city limits`;
 }
-function renderQueue(){
+function updateFilterSummary(){
+  const need=$('#need-filter'),enabled=document.querySelectorAll('input[name=poi]:checked').length;
+  const parts=layer==='assistance'?[need.value==='all'?'All needs':need.selectedOptions[0].textContent+' requests']:[];
+  parts.push(enabled===3?'All places':enabled===0?'No places':`${enabled} place ${enabled===1?'type':'types'}`);
+  if($('#houston-scenario').value==='empty')parts.push('Coverage exercise');
+  $('#map-filter-summary').textContent=parts.join(' · ');
+  $('#map-filters').dataset.active=String((layer==='assistance'&&need.value!=='all')||enabled!==3||$('#houston-scenario').value!=='normal');
+}
+function renderQueue({preservePosition=false}={}){
   if(!data)return;
   const term=$('#map-search').value.trim(),searching=Boolean(term);
   $('#map-search-clear').hidden=!searching;
@@ -256,7 +265,9 @@ function renderQueue(){
     NEED_TYPES.indexOf(a.priority)-NEED_TYPES.indexOf(b.priority)||b.openCount-a.openCount);
   const places=searching?found.places:queue==='places'?pois.filter(p=>enabled.includes(p.type)):[];
   const references=searching&&referenceLayer?referenceLayer.search(term):[];
-  const list=$('#map-area-list');list.replaceChildren();
+  const list=$('#map-area-list'),panel=$('#operations-panel');
+  const focusedKey=list.contains(document.activeElement)?document.activeElement.dataset.queueKey:null;
+  const previousScroll={list:list.scrollTop,panel:panel.scrollTop};list.replaceChildren();
   let resultStatus=$('#map-search-results');
   if(!resultStatus){resultStatus=node('div','map-search-results');resultStatus.id='map-search-results';resultStatus.setAttribute('role','status');resultStatus.setAttribute('aria-live','polite');list.before(resultStatus);}
   resultStatus.hidden=!searching;
@@ -264,7 +275,7 @@ function renderQueue(){
   list.setAttribute('aria-label',searching?'Map search results':queue==='priority'?'Priority areas':queue==='coverage'?'Coverage checks':'Places');
   for(const r of rows){
     const b=button('',()=>selectArea(r),'area-row'),mark=node('span',`area-icon ${!r.openCount?'unknown':layer==='hospitality'?'blue':''}`);
-    if(searching)b.dataset.searchResult='true';
+    b.dataset.queueKey='region:'+r.id;if(searching)b.dataset.searchResult='true';
     mark.append(icon(layer==='hospitality'?'shelter':r.priority==='medical'?'medical':r.priority==='evacuation'?'pin':'supplies'));
     const copy=node('span','area-copy');
     copy.append(node('strong','',r.name),node('small','',layer==='hospitality'?'Demo suitability · needs inspection':r.openCount?`${title(r.priority)} · human review`:'No reports · coverage unknown'));
@@ -273,21 +284,26 @@ function renderQueue(){
   if(places.length&&rows.length)list.append(node('div','places-divider','Facilities · fictional'));
   for(const poi of places){
     const b=button('',()=>{focusBounds(geometryBounds(poi.region.geometry),3);showPoi(poi);},'area-row place-row');
-    if(searching)b.dataset.searchResult='true';
+    b.dataset.queueKey='facility:'+poi.id;if(searching)b.dataset.searchResult='true';
     const mark=node('span','area-icon '+(poi.type==='medical'?'':'blue'));mark.append(icon(poi.type));
     const copy=node('span','area-copy');copy.append(node('strong','',poi.name),node('small','',`${poi.region.name} · planning only`));b.append(mark,copy,icon('chevron'));list.append(b);
   }
   if(references.length){
     list.append(node('div','places-divider','Streets & landmarks · geographic context'));
     for(const reference of references.slice(0,24)){
-      const b=button('',()=>showReference(reference),'area-row reference-row');b.dataset.searchResult='true';
+      const b=button('',()=>showReference(reference),'area-row reference-row');b.dataset.searchResult='true';b.dataset.queueKey='reference:'+reference.referenceType+':'+reference.id;
       const mark=node('span','area-icon unknown');mark.append(icon(reference.referenceType==='street'?'map':'pin'));
       const copy=node('span','area-copy');copy.append(node('strong','',reference.name),node('small','',reference.referenceType==='street'?'Street · map reference':title(reference.kind)+' · map reference'));b.append(mark,copy,icon('chevron'));list.append(b);
     }
     if(references.length>24)list.append(node('p','workspace-note',`24 of ${count(references.length)} map references shown. Refine the search to narrow this list.`));
   }
   if(!rows.length&&!places.length&&!references.length)list.append(node('p','record-empty',searching?'No matching areas or facilities. Try another name or resource.':queue==='places'?'No facilities match the enabled categories.':'No areas in this list. Coverage checks remain available.'));
-  if(!searching&&queue==='priority'&&layer==='assistance'&&data.unlocatedRequests.length){const b=button('',showUnlocated,'area-row'),copy=node('span','area-copy');copy.append(node('strong','','Location needs review'),node('small','','Retained outside map totals'));b.append(copy,node('span','area-count',count(data.unlocatedRequests.length)),icon('chevron'));list.append(b);}
+  if(!searching&&queue==='priority'&&layer==='assistance'&&data.unlocatedRequests.length){const b=button('',showUnlocated,'area-row'),copy=node('span','area-copy');copy.append(node('strong','','Location needs review'),node('small','','Retained outside map totals'));b.dataset.queueKey='unlocated';b.append(copy,node('span','area-count',count(data.unlocatedRequests.length)),icon('chevron'));list.append(b);}
+  if(focusedKey&&!frame.hidden){
+    const replacement=[...list.querySelectorAll('[data-queue-key]')].find(row=>row.dataset.queueKey===focusedKey);
+    (replacement||$('#map-search')).focus({preventScroll:true});
+  }
+  if(preservePosition){list.scrollTop=previousScroll.list;panel.scrollTop=previousScroll.panel;}
 }
 function showReference(reference){
   if(!svg||!referenceLayer)return;
@@ -345,7 +361,7 @@ function initializeMap(){
   imagery?.append(detailImagery.element);detailImagery.setEnabled(imageryMode!=='boundaries');
   historicalLayer=createHistoricalLayer({project,unproject,onReady:historicalReady,onStatus:historicalStatus});land.append(historicalLayer.element);
   paintLayer=svgNode('g',{'clip-path':'url(#city-clip)'});poiLayer=svgNode('g',{'aria-label':'Fictional facilities'});svg.append(land,paintLayer,svgNode('path',{d:path(data.city.boundary),fill:'none',stroke:'#b1c5de','stroke-opacity':.45,'stroke-width':1,'vector-effect':'non-scaling-stroke','fill-rule':'evenodd','pointer-events':'none'}));
-  const labels=svgNode('g',{'aria-hidden':'true'});for(const [i,r]of data.regions.entries())if(r.labelPoint&&(i<3||i%9===0)){const [x,y]=project(r.labelPoint),t=svgNode('text',{x,y,class:'map-place-name',fill:'#dbe6f6',stroke:'#0d1119','font-size':5,'text-anchor':'middle'});t.dataset.size='9';t.dataset.rank=String(i<3?i+1:100+i);t.textContent=r.name.toUpperCase();labels.append(t);}const [hx,hy]=project([-95.3698,29.7604]),cityLabel=svgNode('text',{x:hx,y:hy,class:'map-place-name',fill:'#e7edf5',stroke:'#0d1119','font-size':10,'font-weight':600,'text-anchor':'middle'});cityLabel.dataset.size='15';cityLabel.dataset.rank='0';cityLabel.textContent='HOUSTON';labels.append(cityLabel);referenceLayer=createReferenceLayer({project,onStatus:referenceStatus,onReady:()=>{if(svg){renderQueue();setCamera(camera,cameraFitted);}}});
+  const labels=svgNode('g',{'aria-hidden':'true'});for(const [i,r]of data.regions.entries())if(r.labelPoint&&(i<3||i%9===0)){const [x,y]=project(r.labelPoint),t=svgNode('text',{x,y,class:'map-place-name',fill:'#dbe6f6',stroke:'#0d1119','font-size':5,'text-anchor':'middle'});t.dataset.size='9';t.dataset.rank=String(i<3?i+1:100+i);t.textContent=r.name.toUpperCase();labels.append(t);}const [hx,hy]=project([-95.3698,29.7604]),cityLabel=svgNode('text',{x:hx,y:hy,class:'map-place-name',fill:'#e7edf5',stroke:'#0d1119','font-size':10,'font-weight':600,'text-anchor':'middle'});cityLabel.dataset.size='15';cityLabel.dataset.rank='0';cityLabel.textContent='HOUSTON';labels.append(cityLabel);referenceLayer=createReferenceLayer({project,onStatus:referenceStatus,onReady:()=>{if(svg){if($('#map-search').value.trim())renderQueue({preservePosition:true});setCamera(camera,cameraFitted);}}});
   referenceLayer.setVisible({streets:$('#map-streets').checked,landmarks:$('#map-landmarks').checked});svg.append(referenceLayer.element,labels,poiLayer);root.append(svg);referenceLayer.load();historicalLayer.load();
   const fixtures=[['supplies','Northside distribution hub','Water & essential supplies','240 kits',5],['shelter','West community shelter','Temporary hospitality','120 people',18],['medical','Central medical point','Medical assessment','24 stations',60],['supplies','East supply center','Food & essential supplies','180 kits',57],['shelter','South community hub','Temporary hospitality','90 people',42],['medical','North medical point','Medical assessment','12 stations',1]];
   pois=fixtures.flatMap(([type,name,resource,capacity,index],i)=>{const region=data.regions[index];return region?.labelPoint?[{id:`facility-${i}`,type,name,resource,capacity,region,point:region.labelPoint}]:[];});
@@ -392,16 +408,28 @@ async function load(){
   const id=++loadId;clearScenario('Loading Houston…');status.hidden=false;status.textContent='Loading Houston…';
   try{const response=await fetch(`/api/houston?scenario=${encodeURIComponent($('#houston-scenario').value)}`),next=await response.json();if(id!==loadId)return;if(!response.ok||!next.available)throw new Error(next.reason||next.error||'Houston data is unavailable.');data=next;initializeMap();$('#map-fit').disabled=false;status.hidden=true;}catch(e){if(id!==loadId)return;clearScenario('Map unavailable.');status.replaceChildren(node('span','',e.message),button('Try again',load));}
 }
-for(const mode of ['assistance','hospitality'])$('#layer-'+mode).addEventListener('click',()=>{layer=mode;for(const m of ['assistance','hospitality'])$('#layer-'+m).setAttribute('aria-pressed',String(m===mode));$('#need-filter').hidden=mode==='hospitality';$('#layer-description').textContent=mode==='hospitality'?'Bluer tiles show higher demo suitability. Utility and access inputs need inspection.':'Redder tiles have more open requests. Zoom in to see smaller areas.';if(svg){renderTiles();renderQueue();if(selected)renderAreaDetail(selected.region,selected.cell);}});
+$('#map-filters').addEventListener('change',updateFilterSummary);updateFilterSummary();
+for(const mode of ['assistance','hospitality'])$('#layer-'+mode).addEventListener('click',()=>{layer=mode;for(const m of ['assistance','hospitality'])$('#layer-'+m).setAttribute('aria-pressed',String(m===mode));$('#need-filter').hidden=mode==='hospitality';updateFilterSummary();$('#layer-description').textContent=mode==='hospitality'?'Bluer tiles show higher demo suitability. Utility and access inputs need inspection.':'Redder tiles have more open requests. Zoom in to see smaller areas.';if(svg){renderTiles();renderQueue();if(selected)renderAreaDetail(selected.region,selected.cell);}});
 $('#need-filter').addEventListener('change',e=>{filter=e.target.value;if(svg){renderTiles();renderQueue();if(selected)renderAreaDetail(selected.region,selected.cell);}});
 for(const type of ['priority','coverage','places'])$('#queue-'+type).addEventListener('click',()=>{$('#map-search').value='';queue=type;for(const q of ['priority','coverage','places']){$('#queue-'+q).setAttribute('aria-selected',String(q===type));$('#queue-'+q).tabIndex=q===type?0:-1;}$('#map-area-list').setAttribute('aria-label',type==='priority'?'Priority areas':type==='coverage'?'Coverage checks':'Places');renderQueue();});
 $('#map-search').addEventListener('input',renderQueue);$('#houston-scenario').addEventListener('change',load);$('#map-zoom-in').addEventListener('click',()=>{if(svg)animateCamera(zoomAt(camera,1.6));});$('#map-zoom-out').addEventListener('click',()=>{if(svg)animateCamera(zoomAt(camera,1/1.6));});$('#map-fit').addEventListener('click',()=>fitHouston(true));$('#city-fit').addEventListener('click',()=>{location.hash='mayor';fitHouston(true);});
 for(const input of document.querySelectorAll('input[name=poi]'))input.addEventListener('change',()=>{if(svg){renderPois();renderQueue();}});
-$('#imagery-toggle').addEventListener('click',()=>{const panel=$('#imagery-panel');panel.hidden=!panel.hidden;$('#imagery-toggle').setAttribute('aria-expanded',String(!panel.hidden));});document.addEventListener('keydown',e=>{if(e.defaultPrevented||e.key!=='Escape'||frame.hidden)return;const imageryWasOpen=!$('#imagery-panel').hidden,overviewWasOpen=frame.classList.contains('panel-open'),focus=document.activeElement;$('#imagery-panel').hidden=true;$('#imagery-toggle').setAttribute('aria-expanded','false');frame.classList.remove('panel-open');$('#mobile-panel-toggle').setAttribute('aria-expanded','false');if(imageryWasOpen&&$('#imagery-panel').contains(focus))$('#imagery-toggle').focus({preventScroll:true});else if(overviewWasOpen&&$('#operations-panel').contains(focus))$('#mobile-panel-toggle').focus({preventScroll:true});else if(detail.contains(focus)){e.preventDefault();dismissDetail();}});
-$('#basemap-select').addEventListener('change',e=>{imageryModeTouched=true;applyImageryMode(e.target.value);});$('#aerial-opacity').addEventListener('input',e=>{imageryOpacityTouched=true;setImageryOpacity(e.target.value);if(svg)updateMapResolution();});$('#tile-opacity').addEventListener('input',()=>{overlayOpacityTouched=true;if(svg)renderTiles();});$('#mobile-panel-toggle').addEventListener('click',()=>{if(mobile()){const open=frame.classList.toggle('panel-open');$('#mobile-panel-toggle').setAttribute('aria-expanded',String(open));}else{frame.classList.remove('overview-collapsed');$('#mobile-panel-toggle').setAttribute('aria-expanded','true');if(svg)setCamera(cameraFitted?cityFitCamera():camera,cameraFitted);$('#map-search').focus({preventScroll:true});}});
+$('#imagery-toggle').addEventListener('click',()=>{const panel=$('#imagery-panel');panel.hidden=!panel.hidden;$('#imagery-toggle').setAttribute('aria-expanded',String(!panel.hidden));if(mobile()&&!panel.hidden){frame.classList.remove('panel-open');$('#mobile-panel-toggle').setAttribute('aria-expanded','false');}});document.addEventListener('keydown',e=>{if(e.defaultPrevented||e.key!=='Escape'||frame.hidden)return;const imageryWasOpen=!$('#imagery-panel').hidden,overviewWasOpen=frame.classList.contains('panel-open'),focus=document.activeElement;$('#imagery-panel').hidden=true;$('#imagery-toggle').setAttribute('aria-expanded','false');frame.classList.remove('panel-open');$('#mobile-panel-toggle').setAttribute('aria-expanded','false');if(imageryWasOpen&&$('#imagery-panel').contains(focus))$('#imagery-toggle').focus({preventScroll:true});else if(overviewWasOpen&&$('#operations-panel').contains(focus))$('#mobile-panel-toggle').focus({preventScroll:true});else if(detail.contains(focus)){e.preventDefault();dismissDetail();}});
+$('#basemap-select').addEventListener('change',e=>{imageryModeTouched=true;applyImageryMode(e.target.value);});$('#aerial-opacity').addEventListener('input',e=>{imageryOpacityTouched=true;setImageryOpacity(e.target.value);if(svg)updateMapResolution();});$('#tile-opacity').addEventListener('input',()=>{overlayOpacityTouched=true;if(svg)renderTiles();});$('#mobile-panel-toggle').addEventListener('click',()=>{if(mobile()){const open=frame.classList.toggle('panel-open');$('#mobile-panel-toggle').setAttribute('aria-expanded',String(open));if(open){$('#imagery-panel').hidden=true;$('#imagery-toggle').setAttribute('aria-expanded','false');}}else{frame.classList.remove('overview-collapsed');$('#mobile-panel-toggle').setAttribute('aria-expanded','true');if(svg)setCamera(cameraFitted?cityFitCamera():camera,cameraFitted);$('#map-search').focus({preventScroll:true});}});
+compactMapLayout.addEventListener('change',()=>{
+  if(!mobile())return;
+  const imageryPanel=$('#imagery-panel');
+  if(frame.classList.contains('panel-open')&&!imageryPanel.hidden){
+    if($('#operations-panel').contains(document.activeElement))imageryPanel.hidden=true;
+    else frame.classList.remove('panel-open');
+  }
+  $('#mobile-panel-toggle').setAttribute('aria-expanded',String(frame.classList.contains('panel-open')));
+  $('#imagery-toggle').setAttribute('aria-expanded',String(!imageryPanel.hidden));
+  if(svg)requestAnimationFrame(()=>setCamera(camera,cameraFitted));
+});
 $('#desktop-panel-close').addEventListener('click',()=>{frame.classList.add('overview-collapsed');$('#mobile-panel-toggle').setAttribute('aria-expanded','false');$('#mobile-panel-toggle').focus();});
 $('#map-search').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(e.target.value.trim())$('#map-area-list [data-search-result="true"]')?.click();}if(e.key==='Escape'&&e.target.value){e.preventDefault();e.stopPropagation();e.target.value='';renderQueue();}});
-document.addEventListener('keydown',e=>{if(e.key==='/'&&!frame.hidden&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)){e.preventDefault();frame.classList.remove('overview-collapsed');if(mobile()){frame.classList.add('panel-open');$('#mobile-panel-toggle').setAttribute('aria-expanded','true');}$('#map-search').focus();}});
+document.addEventListener('keydown',e=>{if(e.key==='/'&&!frame.hidden&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)){e.preventDefault();frame.classList.remove('overview-collapsed');if(mobile()){frame.classList.add('panel-open');$('#mobile-panel-toggle').setAttribute('aria-expanded','true');$('#imagery-panel').hidden=true;$('#imagery-toggle').setAttribute('aria-expanded','false');}$('#map-search').focus();}});
 load();
 
 for(const [index,id]of ['priority','coverage','places'].entries())$('#queue-'+id).addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();const ids=['priority','coverage','places'],target=ids[e.key==='Home'?0:e.key==='End'?2:(index+(e.key==='ArrowRight'?1:2))%3];$('#queue-'+target).click();$('#queue-'+target).focus();}});
