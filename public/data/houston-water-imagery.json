@@ -1,0 +1,789 @@
+{
+  "schemaVersion": 1,
+  "attribution": "Contains modified Copernicus Sentinel data (2017), distributed through Earth Search.",
+  "description": "Historical surface-water signal. Open water, including ordinary lakes and rivers, tends toward higher MNDWI. Cloud, shadow and missing observations are transparent. An index value does not establish flooding, depth, safety or accessibility.",
+  "method": "Sentinel-2 L2A bottom-of-atmosphere reflectance. Average the four valid 10 m B03 samples on the native B11 20 m grid; apply source scale and offset to both bands. Compute (B03−B11)/(B03+B11). Accept only SCL 4 (vegetation), 5 (unvegetated) and 6 (water) with valid reflectance and positive denominator. Reproject each date separately with nearest-neighbor sampling to the common EPSG:4326 display grid. In same-date granule overlap use the first clear sample in source order.",
+  "rgbMethod": "Same-granule TCI (B04/B03/B02), averaged from 10 m to the analysis grid. RGB and index use identical cloud/shadow/no-data masks. Colors are the display rendering in the source TCI.",
+  "indexEncoding": "16-bit PNG sample 0 = no observation; otherwise MNDWI = (sample − 10001) / 10000. Georeferencing is the scene bbox and display dimensions. No threshold is applied.",
+  "legend": [
+    {
+      "value": -1,
+      "hex": "#1b2025"
+    },
+    {
+      "value": -0.4,
+      "hex": "#373c41"
+    },
+    {
+      "value": 0,
+      "hex": "#6d7377"
+    },
+    {
+      "value": 0.12,
+      "hex": "#388b8d"
+    },
+    {
+      "value": 0.35,
+      "hex": "#10b8b5"
+    },
+    {
+      "value": 0.65,
+      "hex": "#42ded3"
+    },
+    {
+      "value": 1,
+      "hex": "#a3fbe7"
+    }
+  ],
+  "documentation": [
+    "https://sentiwiki.copernicus.eu/web/s2-products",
+    "https://docs.sentinel-hub.com/api/latest/data/sentinel-2-l2a/",
+    "https://science.data.nasa.gov/disasters/data-gallery/sentinel-2-mndwi"
+  ],
+  "scenes": [
+    {
+      "id": "harvey-water-2017-08-15",
+      "title": "Pre-Harvey · 2017-08-15",
+      "date": "2017-08-15",
+      "acquiredAt": "2017-08-15T17:15:19.383000Z",
+      "bbox": [
+        -95.94,
+        29.48,
+        -94.99,
+        30.14
+      ],
+      "crs": "EPSG:4326",
+      "width": 4600,
+      "height": 3660,
+      "analysisResolutionMeters": 20,
+      "displayGrid": "EPSG:4326; approximately 20 m per displayed pixel at Houston",
+      "validFraction": 0.742268,
+      "validPixels": 12496818,
+      "pixelCount": 16836000,
+      "sources": [
+        {
+          "id": "S2A_15RTN_20170815_0_L2A",
+          "catalogUrl": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-l2a/items/S2A_15RTN_20170815_0_L2A",
+          "product": "S2A_MSIL2A_20170815T165851_N0001_R069_T15RTN_20201007T073342.SAFE",
+          "acquiredAt": "2017-08-15T17:15:19.383000Z",
+          "platform": "sentinel-2a",
+          "crs": "EPSG:32615",
+          "processingBaseline": "00.01",
+          "footprintBbox": [
+            -96.10352614028545,
+            28.804454491507947,
+            -94.96291213488072,
+            29.815791988006527
+          ],
+          "assets": {
+            "green": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TN/2017/8/S2A_15RTN_20170815_0_L2A/B03.tif",
+              "sha256": "97ad899ac9a1ff3e761b6471e3834ad773b6d7d3d4f3a5a48446f3c096988eb0",
+              "transform": [
+                10,
+                0,
+                199980,
+                0,
+                -10,
+                3300000
+              ],
+              "shape": [
+                10980,
+                10980
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint16",
+                  "bits_per_sample": 15,
+                  "spatial_resolution": 10,
+                  "scale": 0.0001,
+                  "offset": 0
+                }
+              ]
+            },
+            "swir16": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TN/2017/8/S2A_15RTN_20170815_0_L2A/B11.tif",
+              "sha256": "c54bc7d403213184823b2257ce092230ccd72e4a332861b6d0a903d6e90180fe",
+              "transform": [
+                20,
+                0,
+                199980,
+                0,
+                -20,
+                3300000
+              ],
+              "shape": [
+                5490,
+                5490
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint16",
+                  "bits_per_sample": 15,
+                  "spatial_resolution": 20,
+                  "scale": 0.0001,
+                  "offset": 0
+                }
+              ]
+            },
+            "scl": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TN/2017/8/S2A_15RTN_20170815_0_L2A/SCL.tif",
+              "sha256": "bd8756be2803fa6c0662f80acfefab661feff268678b7b29676fc7123874554f",
+              "transform": [
+                20,
+                0,
+                199980,
+                0,
+                -20,
+                3300000
+              ],
+              "shape": [
+                5490,
+                5490
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint8",
+                  "spatial_resolution": 20
+                }
+              ]
+            },
+            "visual": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TN/2017/8/S2A_15RTN_20170815_0_L2A/TCI.tif",
+              "sha256": "a5934fb28a88556feb518ae5e25ad964a77bfd221997007ddebd1538141b24d1",
+              "transform": [
+                10,
+                0,
+                199980,
+                0,
+                -10,
+                3300000
+              ],
+              "shape": [
+                10980,
+                10980
+              ],
+              "calibration": []
+            }
+          }
+        },
+        {
+          "id": "S2A_15RTP_20170815_1_L2A",
+          "catalogUrl": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-l2a/items/S2A_15RTP_20170815_1_L2A",
+          "product": "S2A_MSIL2A_20170815T165851_N0001_R069_T15RTP_20201007T224332.SAFE",
+          "acquiredAt": "2017-08-15T17:15:19.383000Z",
+          "platform": "sentinel-2a",
+          "crs": "EPSG:32615",
+          "processingBaseline": "00.01",
+          "footprintBbox": [
+            -96.12062125150729,
+            29.705882194948455,
+            -94.96672392423177,
+            30.33986382007444
+          ],
+          "assets": {
+            "green": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TP/2017/8/S2A_15RTP_20170815_1_L2A/B03.tif",
+              "sha256": "109b83f97691155f2cc966d9e712f2809ede008e178543c9d5e9eb1924a9e667",
+              "transform": [
+                10,
+                0,
+                199980,
+                0,
+                -10,
+                3400020
+              ],
+              "shape": [
+                10980,
+                10980
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint16",
+                  "bits_per_sample": 15,
+                  "spatial_resolution": 10,
+                  "scale": 0.0001,
+                  "offset": 0
+                }
+              ]
+            },
+            "swir16": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TP/2017/8/S2A_15RTP_20170815_1_L2A/B11.tif",
+              "sha256": "03e58f7254e4c710384c4b79f96b1e1f23692853d9186eef31b474e2ddc05134",
+              "transform": [
+                20,
+                0,
+                199980,
+                0,
+                -20,
+                3400020
+              ],
+              "shape": [
+                5490,
+                5490
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint16",
+                  "bits_per_sample": 15,
+                  "spatial_resolution": 20,
+                  "scale": 0.0001,
+                  "offset": 0
+                }
+              ]
+            },
+            "scl": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TP/2017/8/S2A_15RTP_20170815_1_L2A/SCL.tif",
+              "sha256": "b568993864eff88553474c607dcf82b4e928aa5c6ff2fa9a4806e26660b3da90",
+              "transform": [
+                20,
+                0,
+                199980,
+                0,
+                -20,
+                3400020
+              ],
+              "shape": [
+                5490,
+                5490
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint8",
+                  "spatial_resolution": 20
+                }
+              ]
+            },
+            "visual": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TP/2017/8/S2A_15RTP_20170815_1_L2A/TCI.tif",
+              "sha256": "a7693ddf36bb3f055220d382bfae94bf6b8cbae19f059aca4ddce8a05f893e0f",
+              "transform": [
+                10,
+                0,
+                199980,
+                0,
+                -10,
+                3400020
+              ],
+              "shape": [
+                10980,
+                10980
+              ],
+              "calibration": []
+            }
+          }
+        }
+      ],
+      "waterUrl": "/data/water/harvey-mndwi-2017-08-15.webp",
+      "waterSha256": "b9cf2e22d0a6c1e4b868b33682e17c5f77e7e356562b314e5b51c8553fb4f68f",
+      "rgbUrl": "/data/water/harvey-rgb-2017-08-15.webp",
+      "rgbSha256": "6a942f0f331bb841c4cfe58c0fce6bbfcd372eae5f195355e7a9b36dc4940f51",
+      "indexUrl": "/data/water/harvey-index-2017-08-15.png",
+      "indexSha256": "9c238acc50e2fc491940c0b3d3042cd7377e1111a75c1b5c2522de6bff0ba651",
+      "url": "/data/water/harvey-mndwi-2017-08-15.webp",
+      "sha256": "b9cf2e22d0a6c1e4b868b33682e17c5f77e7e356562b314e5b51c8553fb4f68f"
+    },
+    {
+      "id": "harvey-water-2017-08-30",
+      "title": "Harvey response · 2017-08-30",
+      "date": "2017-08-30",
+      "acquiredAt": "2017-08-30T17:04:23.981000Z",
+      "bbox": [
+        -95.94,
+        29.48,
+        -94.99,
+        30.14
+      ],
+      "crs": "EPSG:4326",
+      "width": 4600,
+      "height": 3660,
+      "analysisResolutionMeters": 20,
+      "displayGrid": "EPSG:4326; approximately 20 m per displayed pixel at Houston",
+      "validFraction": 0.152962,
+      "validPixels": 2575272,
+      "pixelCount": 16836000,
+      "sources": [
+        {
+          "id": "S2B_15RTN_20170830_0_L2A",
+          "catalogUrl": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-l2a/items/S2B_15RTN_20170830_0_L2A",
+          "product": "S2B_MSIL2A_20170830T165849_N0001_R069_T15RTN_20200401T063559.SAFE",
+          "acquiredAt": "2017-08-30T17:04:23.981000Z",
+          "platform": "sentinel-2b",
+          "crs": "EPSG:32615",
+          "processingBaseline": "00.01",
+          "footprintBbox": [
+            -96.10352614028545,
+            28.804454491507947,
+            -94.96270357720347,
+            29.815791988006527
+          ],
+          "assets": {
+            "green": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TN/2017/8/S2B_15RTN_20170830_0_L2A/B03.tif",
+              "sha256": "ca4067a855837c1f7b20f87315d7ca56fdefecd1b438e6738fc5338f9d10136f",
+              "transform": [
+                10,
+                0,
+                199980,
+                0,
+                -10,
+                3300000
+              ],
+              "shape": [
+                10980,
+                10980
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint16",
+                  "bits_per_sample": 15,
+                  "spatial_resolution": 10,
+                  "scale": 0.0001,
+                  "offset": 0
+                }
+              ]
+            },
+            "swir16": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TN/2017/8/S2B_15RTN_20170830_0_L2A/B11.tif",
+              "sha256": "2b614bb13b0e55eaf895c82b6b6011737a7d324c6f2329291accb7d75f2090c0",
+              "transform": [
+                20,
+                0,
+                199980,
+                0,
+                -20,
+                3300000
+              ],
+              "shape": [
+                5490,
+                5490
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint16",
+                  "bits_per_sample": 15,
+                  "spatial_resolution": 20,
+                  "scale": 0.0001,
+                  "offset": 0
+                }
+              ]
+            },
+            "scl": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TN/2017/8/S2B_15RTN_20170830_0_L2A/SCL.tif",
+              "sha256": "d97a2e7417cdd45b9e129821248e767be5c32cdcd5176c056998800747314f6b",
+              "transform": [
+                20,
+                0,
+                199980,
+                0,
+                -20,
+                3300000
+              ],
+              "shape": [
+                5490,
+                5490
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint8",
+                  "spatial_resolution": 20
+                }
+              ]
+            },
+            "visual": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TN/2017/8/S2B_15RTN_20170830_0_L2A/TCI.tif",
+              "sha256": "5a90f20de10fdcbcab636b1a71c83fae6d08fe8bb74def0b7ff0916fd599b2f1",
+              "transform": [
+                10,
+                0,
+                199980,
+                0,
+                -10,
+                3300000
+              ],
+              "shape": [
+                10980,
+                10980
+              ],
+              "calibration": []
+            }
+          }
+        },
+        {
+          "id": "S2B_15RTP_20170830_0_L2A",
+          "catalogUrl": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-l2a/items/S2B_15RTP_20170830_0_L2A",
+          "product": "S2B_MSIL2A_20170830T165849_N0001_R069_T15RTP_20200402T012056.SAFE",
+          "acquiredAt": "2017-08-30T17:04:23.981000Z",
+          "platform": "sentinel-2b",
+          "crs": "EPSG:32615",
+          "processingBaseline": "00.01",
+          "footprintBbox": [
+            -96.13200677080971,
+            29.705882194948455,
+            -94.96672392423177,
+            30.71785724249536
+          ],
+          "assets": {
+            "green": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TP/2017/8/S2B_15RTP_20170830_0_L2A/B03.tif",
+              "sha256": "1573e62ff77c9ae44e43283c05d20d332358762180f2894f6c8604258c494226",
+              "transform": [
+                10,
+                0,
+                199980,
+                0,
+                -10,
+                3400020
+              ],
+              "shape": [
+                10980,
+                10980
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint16",
+                  "bits_per_sample": 15,
+                  "spatial_resolution": 10,
+                  "scale": 0.0001,
+                  "offset": 0
+                }
+              ]
+            },
+            "swir16": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TP/2017/8/S2B_15RTP_20170830_0_L2A/B11.tif",
+              "sha256": "8f72d6ebffa2826ebdcbe385aa3c236bee351c2ab358d7c735af70df9af162df",
+              "transform": [
+                20,
+                0,
+                199980,
+                0,
+                -20,
+                3400020
+              ],
+              "shape": [
+                5490,
+                5490
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint16",
+                  "bits_per_sample": 15,
+                  "spatial_resolution": 20,
+                  "scale": 0.0001,
+                  "offset": 0
+                }
+              ]
+            },
+            "scl": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TP/2017/8/S2B_15RTP_20170830_0_L2A/SCL.tif",
+              "sha256": "9aec88c69b6a6f2fc29e3fc10806ef0a075ff70d03e9fc8591e713a36d3ef632",
+              "transform": [
+                20,
+                0,
+                199980,
+                0,
+                -20,
+                3400020
+              ],
+              "shape": [
+                5490,
+                5490
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint8",
+                  "spatial_resolution": 20
+                }
+              ]
+            },
+            "visual": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TP/2017/8/S2B_15RTP_20170830_0_L2A/TCI.tif",
+              "sha256": "4d410f5896fdeede9c9ba8f1f4b0a72f8922598f38b769ce4ebbe5e182cfb8f5",
+              "transform": [
+                10,
+                0,
+                199980,
+                0,
+                -10,
+                3400020
+              ],
+              "shape": [
+                10980,
+                10980
+              ],
+              "calibration": []
+            }
+          }
+        }
+      ],
+      "waterUrl": "/data/water/harvey-mndwi-2017-08-30.webp",
+      "waterSha256": "c8999fc11c1567bded5e94d4e64ac4b1cdb2ba997163cf681148ad27301fc64c",
+      "rgbUrl": "/data/water/harvey-rgb-2017-08-30.webp",
+      "rgbSha256": "b7a732fcdc8860cd9d3337ad4e4c720f911f3105ee574323130093e0751c7ff6",
+      "indexUrl": "/data/water/harvey-index-2017-08-30.png",
+      "indexSha256": "558d9a3c1acf9be1d40a16d037b84b61e36a0b377e30d714ede4fadd2e926eb7",
+      "url": "/data/water/harvey-mndwi-2017-08-30.webp",
+      "sha256": "c8999fc11c1567bded5e94d4e64ac4b1cdb2ba997163cf681148ad27301fc64c"
+    },
+    {
+      "id": "harvey-water-2017-09-01",
+      "title": "Harvey response · 2017-09-01",
+      "date": "2017-09-01",
+      "acquiredAt": "2017-09-01T17:05:23.464000Z",
+      "bbox": [
+        -95.94,
+        29.48,
+        -94.99,
+        30.14
+      ],
+      "crs": "EPSG:4326",
+      "width": 4600,
+      "height": 3660,
+      "analysisResolutionMeters": 20,
+      "displayGrid": "EPSG:4326; approximately 20 m per displayed pixel at Houston",
+      "validFraction": 0.320008,
+      "validPixels": 5387655,
+      "pixelCount": 16836000,
+      "sources": [
+        {
+          "id": "S2A_15RTN_20170901_0_L2A",
+          "catalogUrl": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-l2a/items/S2A_15RTN_20170901_0_L2A",
+          "product": "S2A_MSIL2A_20170901T170521_N0001_R026_T15RTN_20201007T171415.SAFE",
+          "acquiredAt": "2017-09-01T17:05:23.464000Z",
+          "platform": "sentinel-2a",
+          "crs": "EPSG:32615",
+          "processingBaseline": "00.01",
+          "footprintBbox": [
+            -95.63083625316389,
+            29.137626866461268,
+            -94.95538404334393,
+            29.815791988006527
+          ],
+          "assets": {
+            "green": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TN/2017/9/S2A_15RTN_20170901_0_L2A/B03.tif",
+              "sha256": "13342590ba656ea625881be715b2908042f92e92dad894cc47cf82ea5bd46376",
+              "transform": [
+                10,
+                0,
+                199980,
+                0,
+                -10,
+                3300000
+              ],
+              "shape": [
+                10980,
+                10980
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint16",
+                  "bits_per_sample": 15,
+                  "spatial_resolution": 10,
+                  "scale": 0.0001,
+                  "offset": 0
+                }
+              ]
+            },
+            "swir16": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TN/2017/9/S2A_15RTN_20170901_0_L2A/B11.tif",
+              "sha256": "51787449fccf2bc8e1fe57b2ffe4cedd9c5b38d4bb7e36359662cfaf03cca299",
+              "transform": [
+                20,
+                0,
+                199980,
+                0,
+                -20,
+                3300000
+              ],
+              "shape": [
+                5490,
+                5490
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint16",
+                  "bits_per_sample": 15,
+                  "spatial_resolution": 20,
+                  "scale": 0.0001,
+                  "offset": 0
+                }
+              ]
+            },
+            "scl": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TN/2017/9/S2A_15RTN_20170901_0_L2A/SCL.tif",
+              "sha256": "ba368dad3f713f6ac07b475d9f2fe9cb5927e56322ed5aa2fb995e92bc498805",
+              "transform": [
+                20,
+                0,
+                199980,
+                0,
+                -20,
+                3300000
+              ],
+              "shape": [
+                5490,
+                5490
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint8",
+                  "spatial_resolution": 20
+                }
+              ]
+            },
+            "visual": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TN/2017/9/S2A_15RTN_20170901_0_L2A/TCI.tif",
+              "sha256": "ff62f23cfad4aef081f61e55df595a358a725420586c2b88d46b77ae3f3f08da",
+              "transform": [
+                10,
+                0,
+                199980,
+                0,
+                -10,
+                3300000
+              ],
+              "shape": [
+                10980,
+                10980
+              ],
+              "calibration": []
+            }
+          }
+        },
+        {
+          "id": "S2A_15RTP_20170901_0_L2A",
+          "catalogUrl": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-l2a/items/S2A_15RTP_20170901_0_L2A",
+          "product": "S2A_MSIL2A_20170901T170521_N0001_R026_T15RTP_20200710T144513.SAFE",
+          "acquiredAt": "2017-09-01T17:05:23.464000Z",
+          "platform": "sentinel-2a",
+          "crs": "EPSG:32615",
+          "processingBaseline": "00.01",
+          "footprintBbox": [
+            -95.51160121684703,
+            29.71837833262284,
+            -94.96672392423177,
+            30.053461794319087
+          ],
+          "assets": {
+            "green": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TP/2017/9/S2A_15RTP_20170901_0_L2A/B03.tif",
+              "sha256": "3af1bef8e561e82d05b40bd298c9e2f6b951cb8220d58d1f357994babbd263fe",
+              "transform": [
+                10,
+                0,
+                199980,
+                0,
+                -10,
+                3400020
+              ],
+              "shape": [
+                10980,
+                10980
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint16",
+                  "bits_per_sample": 15,
+                  "spatial_resolution": 10,
+                  "scale": 0.0001,
+                  "offset": 0
+                }
+              ]
+            },
+            "swir16": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TP/2017/9/S2A_15RTP_20170901_0_L2A/B11.tif",
+              "sha256": "0bbd9f9251242a4be7c31c32ee78fc754d4549df42cdd5c4e26d16471b968341",
+              "transform": [
+                20,
+                0,
+                199980,
+                0,
+                -20,
+                3400020
+              ],
+              "shape": [
+                5490,
+                5490
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint16",
+                  "bits_per_sample": 15,
+                  "spatial_resolution": 20,
+                  "scale": 0.0001,
+                  "offset": 0
+                }
+              ]
+            },
+            "scl": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TP/2017/9/S2A_15RTP_20170901_0_L2A/SCL.tif",
+              "sha256": "a217043c1e7903c40961d4ad2ced973fc7d6dd25f783295ae354cbdc44bd37ed",
+              "transform": [
+                20,
+                0,
+                199980,
+                0,
+                -20,
+                3400020
+              ],
+              "shape": [
+                5490,
+                5490
+              ],
+              "calibration": [
+                {
+                  "nodata": 0,
+                  "data_type": "uint8",
+                  "spatial_resolution": 20
+                }
+              ]
+            },
+            "visual": {
+              "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/15/R/TP/2017/9/S2A_15RTP_20170901_0_L2A/TCI.tif",
+              "sha256": "522486c4f2a110adf7e0f5f4625820f3437af46fb42db37b9013d9bd80115f3b",
+              "transform": [
+                10,
+                0,
+                199980,
+                0,
+                -10,
+                3400020
+              ],
+              "shape": [
+                10980,
+                10980
+              ],
+              "calibration": []
+            }
+          }
+        }
+      ],
+      "waterUrl": "/data/water/harvey-mndwi-2017-09-01.webp",
+      "waterSha256": "077c23e3f1fd30af4d5bccab8d97363a9a0af9afce372cf0f30af3b88ee308f0",
+      "rgbUrl": "/data/water/harvey-rgb-2017-09-01.webp",
+      "rgbSha256": "72bcad88f08ceea8141f52da99c1e00ff959806e8ba9bc4ff033abefe5741587",
+      "indexUrl": "/data/water/harvey-index-2017-09-01.png",
+      "indexSha256": "0bf29d9edfa45a3a854b4182343758adf7294d4645c0d52de57aa2d8a434c97b",
+      "url": "/data/water/harvey-mndwi-2017-09-01.webp",
+      "sha256": "077c23e3f1fd30af4d5bccab8d97363a9a0af9afce372cf0f30af3b88ee308f0"
+    }
+  ]
+}

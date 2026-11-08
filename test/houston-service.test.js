@@ -90,3 +90,53 @@ test('bundled geographic context assets have exact local image routes without ar
   }
   assert.equal((await fetch(`${base}/data/context-arbitrary.jpg`)).status,404);
 });
+
+function pyramidFixture(t){
+  const f=fixture(t),tile={id:'naip-l0-r00-c00',file:'naip-l0-r00-c00.webp',bbox:[-95.8,29.6,-95.2,30],width:2048,height:2048,metersPerPixel:20,available:true,bytes:16};
+  const fine={...tile,id:'naip-l3-r00-c00',file:'naip-l3-r00-c00.webp',metersPerPixel:2.7};
+  const manifest={schemaVersion:1,crs:'EPSG:4326',bbox:[-95.8,29.6,-95.2,30],downloading:true,historical:true,date:'Historical fixture',tiers:[
+    {id:'naip-4k',level:0,metersPerPixel:20,tiles:[tile]},
+    {id:'naip-32k',level:3,metersPerPixel:2.7,tiles:[fine]}
+  ]};
+  f.put('houston-imagery-pyramid.json',manifest);mkdirSync(join(f.directory,'imagery'));
+  const bytes=Buffer.from('RIFFfixtureWEBP');writeFileSync(join(f.directory,'imagery',tile.file),bytes);
+  return {...f,tile,fine,manifest,bytes};
+}
+
+test('detail manifest advertises only local existing allowlisted tiles and preserves progressive gaps',t=>{
+  const f=pyramidFixture(t),p=f.service.imageryPyramid();
+  assert.equal(p.available,true);assert.equal(p.complete,false);assert.equal(p.downloading,true);assert.equal(p.stats.totalTiles,2);assert.equal(p.stats.availableTiles,1);
+  assert.equal(p.tiers[0].tiles[0].url,'/data/imagery/naip-l0-r00-c00.webp');
+  assert.equal(p.tiers[1].tiles[0].available,false);assert.equal(p.tiers[1].tiles[0].url,null);
+  assert.equal(f.service.view().imageryPyramid.stats.availableTiles,1);assert.deepEqual(f.service.imageryTile(f.tile.file),f.bytes);
+  assert.throws(()=>f.service.imageryTile(f.fine.file),error=>error.status===404);
+  for(const name of ['../.env','../../state.json','naip-l4-r00-c00.webp','unknown.webp'])assert.throws(()=>f.service.imageryTile(name),error=>error.status===404);
+});
+
+test('invalid detail geometry or manifest never replaces verified city geometry or exposes arbitrary files',t=>{
+  const f=pyramidFixture(t);
+  for(const bad of [{...f.tile,file:'../../.env'},{...f.tile,bbox:[-200,29,-95,30]},{...f.tile,bbox:[-96,29,-95,30]},{...f.tile,width:0}]){
+    f.put('houston-imagery-pyramid.json',{...f.manifest,tiers:[{...f.manifest.tiers[0],tiles:[bad]}]});
+    assert.equal(f.service.imageryPyramid().available,false);assert.equal(f.service.view().available,true);
+  }
+  f.put('houston-imagery-pyramid.json',{...f.manifest,crs:'EPSG:3857'});assert.equal(f.service.imageryPyramid().available,false);assert.equal(f.service.view().regions.length,4);
+  rmSync(join(f.directory,'houston-imagery-pyramid.json'));assert.deepEqual(f.service.imageryPyramid().tiers,[]);assert.equal(f.service.view().available,true);
+});
+
+test('detail HTTP endpoints remain read-only and reject unlisted or missing imagery paths',async t=>{
+  const f=pyramidFixture(t),store=new Store(),before=store.read(),app=createApp(store,undefined,f.service);
+  await new Promise(resolve=>app.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(resolve=>app.close(resolve)));
+  const base=`http://127.0.0.1:${app.address().port}`;
+  const manifest=await fetch(base+'/api/houston/imagery');assert.equal(manifest.status,200);assert.equal((await manifest.json()).stats.availableTiles,1);
+  assert.equal((await fetch(base+'/api/houston/imagery?path=../.env')).status,400);
+  const tile=await fetch(base+'/data/imagery/'+f.tile.file);assert.equal(tile.status,200);assert.equal(tile.headers.get('content-type'),'image/webp');assert.deepEqual(Buffer.from(await tile.arrayBuffer()),f.bytes);
+  for(const filename of [f.fine.file,'naip-l0-r99-c99.webp','../.env'])assert.equal((await fetch(base+'/data/imagery/'+filename)).status,404);
+  assert.deepEqual(store.read(),before);
+});
+
+
+test('rejected detail entries cannot make an otherwise partial pyramid appear complete',t=>{
+  const f=pyramidFixture(t);
+  f.put('houston-imagery-pyramid.json',{...f.manifest,tiers:[{...f.manifest.tiers[0],tiles:[f.tile,{...f.fine,file:'../../.env'}]}]});
+  const p=f.service.imageryPyramid();assert.equal(p.available,true);assert.equal(p.complete,false);assert.equal(p.stats.totalTiles,2);assert.equal(p.stats.validatedTiles,1);assert.equal(p.stats.rejectedTiles,1);assert.equal(p.stats.availableTiles,1);
+});

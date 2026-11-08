@@ -1,0 +1,447 @@
+{
+  "schemaVersion": 1,
+  "id": "noaa-ngs-harvey-2017",
+  "available": true,
+  "event": "Hurricane Harvey",
+  "historical": true,
+  "crs": "EPSG:4326",
+  "bbox": [
+    -95.95,
+    29.5,
+    -94.97,
+    30.15
+  ],
+  "acquisitionDateRange": [
+    "2017-08-30",
+    "2017-09-03"
+  ],
+  "imagery": [
+    {
+      "id": "harvey-20170830",
+      "date": "2017-08-30",
+      "label": "Harvey aerial · 2017-08-30",
+      "sourceLayers": [
+        "20170830-rgb"
+      ],
+      "overview": {
+        "id": "harvey-20170830-overview",
+        "label": "Houston flight coverage",
+        "date": "2017-08-30",
+        "bbox": [
+          -95.95,
+          29.5,
+          -94.97,
+          30.15
+        ],
+        "crs": "EPSG:4326",
+        "file": "harvey-20170830-overview.webp",
+        "path": "/data/flood-imagery/harvey-20170830-overview.webp",
+        "width": 2854,
+        "height": 2182,
+        "sourceCacheLevel": 12,
+        "sourceLayers": [
+          "20170830-rgb"
+        ],
+        "role": "overview",
+        "available": true,
+        "bytes": 160762,
+        "sha256": "ba517d8e25547883dcc15dc8ff9cfe18a374ace85572f7134f0c8b424f8a59e8",
+        "coverageFraction": 0.0943497058496702,
+        "sourceMetersPerPixel": 33.15641557105241,
+        "sourceTileRange": {
+          "columnMin": 956,
+          "columnMax": 967,
+          "rowMin": 1687,
+          "rowMax": 1696
+        },
+        "sourceTileCount": 120,
+        "nonemptySourceTileCount": 22,
+        "sourceDigest": "8d4e5e8929ed0505378b076491146132fd60f3a319cf1a0905502c05139b2182",
+        "warpErrorOutputPixelsBound": 0.00038907352649013267,
+        "retrievedAt": "2026-11-08T06:36:09.386113+00:00"
+      },
+      "detail": [
+        {
+          "id": "harvey-20170830-addicks",
+          "label": "Addicks Reservoir",
+          "date": "2017-08-30",
+          "bbox": [
+            -95.7,
+            29.755,
+            -95.58,
+            29.855
+          ],
+          "crs": "EPSG:4326",
+          "file": "harvey-20170830-addicks.webp",
+          "path": "/data/flood-imagery/harvey-20170830-addicks.webp",
+          "width": 5592,
+          "height": 5371,
+          "sourceCacheLevel": 16,
+          "sourceLayers": [
+            "20170830-rgb"
+          ],
+          "role": "detail",
+          "available": true,
+          "bytes": 5052708,
+          "sha256": "d2db95064e4bc795307afa1a3a28b34957c06abf104fd9e00952b3f0543ddced",
+          "coverageFraction": 0.9957743780579699,
+          "sourceMetersPerPixel": 2.0726905388069485,
+          "sourceTileRange": {
+            "columnMin": 15346,
+            "columnMax": 15368,
+            "rowMin": 27068,
+            "rowMax": 27089
+          },
+          "sourceTileCount": 506,
+          "nonemptySourceTileCount": 504,
+          "sourceDigest": "d00e6c16fa4b9932873a551c3402405e8dcd4a4f4b2fa4a653382a7cbe3e724e",
+          "warpErrorOutputPixelsBound": 2.389812361279171e-05,
+          "retrievedAt": "2026-11-08T06:36:19.375324+00:00"
+        },
+        {
+          "id": "harvey-20170830-barker",
+          "label": "Barker Reservoir",
+          "date": "2017-08-30",
+          "bbox": [
+            -95.72,
+            29.7,
+            -95.63,
+            29.775
+          ],
+          "crs": "EPSG:4326",
+          "file": "harvey-20170830-barker.webp",
+          "path": "/data/flood-imagery/harvey-20170830-barker.webp",
+          "width": 4194,
+          "height": 4025,
+          "sourceCacheLevel": 16,
+          "sourceLayers": [
+            "20170830-rgb"
+          ],
+          "role": "detail",
+          "available": true,
+          "bytes": 2564014,
+          "sha256": "6a901f6cd1ae585e1f81749c63ddab320aff47dabad86cbf93ced6446ef24f1b",
+          "coverageFraction": 0.9447588835870232,
+          "sourceMetersPerPixel": 2.0740878329294494,
+          "sourceTileRange": {
+            "columnMin": 15342,
+            "columnMax": 15359,
+            "rowMin": 27085,
+            "rowMax": 27101
+          },
+          "sourceTileCount": 306,
+          "nonemptySourceTileCount": 291,
+          "sourceDigest": "b8a4bb1afb4c6d249da6eb92d3ef765413df0b1df458921a62efb4d867ac41f4",
+          "warpErrorOutputPixelsBound": 2.3834125953829136e-05,
+          "retrievedAt": "2026-11-08T06:36:21.404601+00:00"
+        }
+      ],
+      "coverageNote": "Partial NOAA flight coverage; transparent gaps are unavailable historical imagery, not evidence of dry ground."
+    },
+    {
+      "id": "harvey-20170831",
+      "date": "2017-08-31",
+      "label": "Harvey aerial · 2017-08-31",
+      "sourceLayers": [
+        "20170831a-rgb",
+        "20170831b-rgb"
+      ],
+      "overview": {
+        "id": "harvey-20170831-overview",
+        "label": "Houston flight coverage",
+        "date": "2017-08-31",
+        "bbox": [
+          -95.95,
+          29.5,
+          -94.97,
+          30.15
+        ],
+        "crs": "EPSG:4326",
+        "file": "harvey-20170831-overview.webp",
+        "path": "/data/flood-imagery/harvey-20170831-overview.webp",
+        "width": 2854,
+        "height": 2182,
+        "sourceCacheLevel": 12,
+        "sourceLayers": [
+          "20170831a-rgb",
+          "20170831b-rgb"
+        ],
+        "role": "overview",
+        "available": true,
+        "bytes": 563952,
+        "sha256": "7ca1f7d9a67ee9059b5392dbc75bfd57e8dc8efa04c02fce63fa693d161b25c4",
+        "coverageFraction": 0.31419375703741576,
+        "sourceMetersPerPixel": 33.15641557105241,
+        "sourceTileRange": {
+          "columnMin": 956,
+          "columnMax": 967,
+          "rowMin": 1687,
+          "rowMax": 1696
+        },
+        "sourceTileCount": 240,
+        "nonemptySourceTileCount": 79,
+        "sourceDigest": "2de111fcf763be844126b7526865a26ec30aa8ad0c08f0c04c64893f7edb86e3",
+        "warpErrorOutputPixelsBound": 0.00038907352649013267,
+        "retrievedAt": "2026-11-08T06:36:10.002939+00:00"
+      },
+      "detail": [
+        {
+          "id": "harvey-20170831-kingwood",
+          "label": "Kingwood / West Fork San Jacinto",
+          "date": "2017-08-31",
+          "bbox": [
+            -95.225,
+            29.98,
+            -95.145,
+            30.045
+          ],
+          "crs": "EPSG:4326",
+          "file": "harvey-20170831-kingwood.webp",
+          "path": "/data/flood-imagery/harvey-20170831-kingwood.webp",
+          "width": 3728,
+          "height": 3498,
+          "sourceCacheLevel": 16,
+          "sourceLayers": [
+            "20170831a-rgb"
+          ],
+          "role": "detail",
+          "available": true,
+          "bytes": 1846900,
+          "sha256": "9728b86a55569abb5e108eb8b07b434e5bef4fe3d1f2e12031d8bf227c4518f5",
+          "coverageFraction": 0.8287803024168316,
+          "sourceMetersPerPixel": 2.068377147597598,
+          "sourceTileRange": {
+            "columnMin": 15432,
+            "columnMax": 15447,
+            "rowMin": 27029,
+            "rowMax": 27042
+          },
+          "sourceTileCount": 224,
+          "nonemptySourceTileCount": 191,
+          "sourceDigest": "814143d654fc2d3c48503d65d43eea0996ee98066461e95443396f68375c9e57",
+          "warpErrorOutputPixelsBound": 2.402659493738215e-05,
+          "retrievedAt": "2026-11-08T06:36:22.984210+00:00"
+        },
+        {
+          "id": "harvey-20170831-san-jacinto",
+          "label": "Lake Houston / San Jacinto River",
+          "date": "2017-08-31",
+          "bbox": [
+            -95.135,
+            29.815,
+            -95.045,
+            29.92
+          ],
+          "crs": "EPSG:4326",
+          "file": "harvey-20170831-san-jacinto.webp",
+          "path": "/data/flood-imagery/harvey-20170831-san-jacinto.webp",
+          "width": 4194,
+          "height": 5643,
+          "sourceCacheLevel": 16,
+          "sourceLayers": [
+            "20170831a-rgb"
+          ],
+          "role": "detail",
+          "available": true,
+          "bytes": 1968100,
+          "sha256": "2162cfd3749ed8c3ebb84308d52960c65213fab141e5be585629f3ed89d87ca5",
+          "coverageFraction": 0.6572764007821609,
+          "sourceMetersPerPixel": 2.071394182938639,
+          "sourceTileRange": {
+            "columnMin": 15449,
+            "columnMax": 15465,
+            "rowMin": 27055,
+            "rowMax": 27077
+          },
+          "sourceTileCount": 391,
+          "nonemptySourceTileCount": 275,
+          "sourceDigest": "4ddec7233d272639b3864fa0e722fe7984182fccc6c5352834db18b97ded0003",
+          "warpErrorOutputPixelsBound": 2.3947571836157368e-05,
+          "retrievedAt": "2026-11-08T06:36:25.436908+00:00"
+        }
+      ],
+      "coverageNote": "Partial NOAA flight coverage; transparent gaps are unavailable historical imagery, not evidence of dry ground."
+    },
+    {
+      "id": "harvey-20170901",
+      "date": "2017-09-01",
+      "label": "Harvey aerial · 2017-09-01",
+      "sourceLayers": [
+        "20170901b-rgb"
+      ],
+      "overview": {
+        "id": "harvey-20170901-overview",
+        "label": "Houston flight coverage",
+        "date": "2017-09-01",
+        "bbox": [
+          -95.95,
+          29.5,
+          -94.97,
+          30.15
+        ],
+        "crs": "EPSG:4326",
+        "file": "harvey-20170901-overview.webp",
+        "path": "/data/flood-imagery/harvey-20170901-overview.webp",
+        "width": 2854,
+        "height": 2182,
+        "sourceCacheLevel": 12,
+        "sourceLayers": [
+          "20170901b-rgb"
+        ],
+        "role": "overview",
+        "available": true,
+        "bytes": 308386,
+        "sha256": "5fcc5ceef01f89b680eb9f5e99ea562324ac43867ff41364cdca7686acb7a6ad",
+        "coverageFraction": 0.16470266697583658,
+        "sourceMetersPerPixel": 33.15641557105241,
+        "sourceTileRange": {
+          "columnMin": 956,
+          "columnMax": 967,
+          "rowMin": 1687,
+          "rowMax": 1696
+        },
+        "sourceTileCount": 120,
+        "nonemptySourceTileCount": 30,
+        "sourceDigest": "e01cc0671b832f4fd6a45adee310e4d6220d568047f930d76584bfe600f0d873",
+        "warpErrorOutputPixelsBound": 0.00038907352649013267,
+        "retrievedAt": "2026-11-08T06:36:10.489948+00:00"
+      },
+      "detail": [],
+      "coverageNote": "Partial NOAA flight coverage; transparent gaps are unavailable historical imagery, not evidence of dry ground."
+    },
+    {
+      "id": "harvey-20170902",
+      "date": "2017-09-02",
+      "label": "Harvey aerial · 2017-09-02",
+      "sourceLayers": [
+        "20170902c-rgb"
+      ],
+      "overview": {
+        "id": "harvey-20170902-overview",
+        "label": "Houston flight coverage",
+        "date": "2017-09-02",
+        "bbox": [
+          -95.95,
+          29.5,
+          -94.97,
+          30.15
+        ],
+        "crs": "EPSG:4326",
+        "file": "harvey-20170902-overview.webp",
+        "path": "/data/flood-imagery/harvey-20170902-overview.webp",
+        "width": 2854,
+        "height": 2182,
+        "sourceCacheLevel": 12,
+        "sourceLayers": [
+          "20170902c-rgb"
+        ],
+        "role": "overview",
+        "available": true,
+        "bytes": 122198,
+        "sha256": "04a0b61d74e4dffd253d46639327bae1b5a4773681d0931f387f9be4f5bcec8d",
+        "coverageFraction": 0.06837461629423897,
+        "sourceMetersPerPixel": 33.15641557105241,
+        "sourceTileRange": {
+          "columnMin": 956,
+          "columnMax": 967,
+          "rowMin": 1687,
+          "rowMax": 1696
+        },
+        "sourceTileCount": 120,
+        "nonemptySourceTileCount": 28,
+        "sourceDigest": "e2e2adc28a5c708169d0ce8ce08af6231696fb116e1c5ba18881dcc43b1517c7",
+        "warpErrorOutputPixelsBound": 0.00038907352649013267,
+        "retrievedAt": "2026-11-08T06:36:10.934551+00:00"
+      },
+      "detail": [],
+      "coverageNote": "Partial NOAA flight coverage; transparent gaps are unavailable historical imagery, not evidence of dry ground."
+    },
+    {
+      "id": "harvey-20170903",
+      "date": "2017-09-03",
+      "label": "Harvey aerial · 2017-09-03",
+      "sourceLayers": [
+        "20170903a-rgb"
+      ],
+      "overview": {
+        "id": "harvey-20170903-overview",
+        "label": "Houston flight coverage",
+        "date": "2017-09-03",
+        "bbox": [
+          -95.95,
+          29.5,
+          -94.97,
+          30.15
+        ],
+        "crs": "EPSG:4326",
+        "file": "harvey-20170903-overview.webp",
+        "path": "/data/flood-imagery/harvey-20170903-overview.webp",
+        "width": 2854,
+        "height": 2182,
+        "sourceCacheLevel": 12,
+        "sourceLayers": [
+          "20170903a-rgb"
+        ],
+        "role": "overview",
+        "available": true,
+        "bytes": 210524,
+        "sha256": "457ef5e09bf60f9605eddcc869815c747c56a1e07f661699ab36f3b9bc3f5daa",
+        "coverageFraction": 0.15599827087523133,
+        "sourceMetersPerPixel": 33.15641557105241,
+        "sourceTileRange": {
+          "columnMin": 956,
+          "columnMax": 967,
+          "rowMin": 1687,
+          "rowMax": 1696
+        },
+        "sourceTileCount": 120,
+        "nonemptySourceTileCount": 32,
+        "sourceDigest": "fde330291729ac3c5f1044c4572d06de40db5cfa2b053c0c6ccbb1a6a5ff1460",
+        "warpErrorOutputPixelsBound": 0.00038907352649013267,
+        "retrievedAt": "2026-11-08T06:36:11.407489+00:00"
+      },
+      "detail": [],
+      "coverageNote": "Partial NOAA flight coverage; transparent gaps are unavailable historical imagery, not evidence of dry ground."
+    }
+  ],
+  "attribution": "NOAA National Geodetic Survey · Hurricane Harvey emergency-response RGB imagery (2017)",
+  "source": {
+    "agency": "NOAA National Geodetic Survey, Remote Sensing Division",
+    "viewerUrl": "https://storms.ngs.noaa.gov/storms/harvey/index.html",
+    "metadataUrl": "https://www.fisheries.noaa.gov/inport/item/59048",
+    "capabilitiesUrl": "https://storms.ngs.noaa.gov/storms/tilesd/services/tileserver.php/wmts?SERVICE=WMTS&REQUEST=GetCapabilities",
+    "tileUrlTemplate": "https://stormscdn.ngs.noaa.gov/{layer}/{z}/{x}/{y}",
+    "crs": "EPSG:3857",
+    "tileMatrixSet": "GoogleMapsCompatible",
+    "tileSize": 256,
+    "eventAcquisitionDateRange": [
+      "2017-08-27",
+      "2017-09-03"
+    ],
+    "product": "Directly georeferenced emergency-response RGB mosaics; not a cadastral or navigation survey",
+    "nativeProductGroundSampleDistanceMetersApprox": 0.5,
+    "nativeResolutionNote": "NOAA viewer reports approximately 50cm at zoom18. This bounded cache uses coarser zoom12 overview and zoom16 detail, with actual cached resolution recorded per image.",
+    "termsUrl": "https://www.fisheries.noaa.gov/inport/item/59048",
+    "license": "CC0-1.0",
+    "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "licenseNote": "NOAA InPort item59048 explicitly identifies this dataset as CC0-1.0, with no access restrictions.",
+    "horizontalAccuracyNote": "NOAA says absolute horizontal positions should be in the 3–5m range in flat areas; accuracy has not been assessed.",
+    "useConstraints": "NOAA public U.S. federal government imagery. Provided as-is for visual damage analysis and planning; no accuracy/completeness guarantee; not for navigation, charting, or surveying."
+  },
+  "processing": {
+    "rgb": "Original NOAA true-color RGB; no water classification, color tint, synthetic imagery, or gap filling.",
+    "reprojection": "EPSG3857 XYZ source pixels reprojected to EPSG4326 using 32-row Pillow bicubic mesh; interpolation error bound <0.05 output pixels.",
+    "encoding": "WebP quality 85; original source alpha/no-data retained. NOAA all-transparent1px no-data responses are interpreted as empty256px source grid cells.",
+    "sameDayMosaicOrder": "2017-08-31 Flight1 then Flight2, with Flight2 only where source alpha has real imagery.",
+    "script": "scripts/prepare_houston_flood_imagery.py",
+    "runtime": "All image files are local; no runtime source requests."
+  },
+  "limitations": [
+    "Flight-strip coverage is nonuniform. Transparent pixels mean imagery unavailable, never an inferred flood or dry-land state.",
+    "Acquisition is an actual historical event date, not a current observation. Floodwater can be muddy brown or hidden by trees, clouds, and buildings.",
+    "Normal water bodies and floodwater both appear; these RGB pixels alone do not establish a precise flood boundary or emergency condition.",
+    "Geographic context only. These images do not establish assistance need, hospitality suitability, welfare, facility operation, or safe travel.",
+    "The separate xBD classifier study pairs have no verified Houston placement and are not used here."
+  ],
+  "preparedAt": "2026-11-08T06:36:25.436980+00:00"
+}

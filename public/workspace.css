@@ -481,3 +481,42 @@ input[type=checkbox],input[type=range]{accent-color:var(--blue)}
  .people-layout.is-detail,.messages-layout.is-detail{overflow:visible}
  .messages-layout.is-detail .conversation{height:auto}
 }
+
+/* Geographic references remain quieter than the red/blue response overlays. */
+.map-road-line{stroke:#c0ccdb;stroke-width:1.25px;stroke-opacity:.22;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.map-road-line.rank-1{stroke-width:.9px;stroke-opacity:.19}
+.map-road-line.rank-2{stroke-width:.65px;stroke-opacity:.15}
+.map-street-label,.map-landmark-label text{font-family:'Helvetica Neue',Arial,sans-serif;font-weight:500;fill:#d7e0eb;stroke:#101722;paint-order:stroke;stroke-linejoin:round;letter-spacing:0;pointer-events:none}
+.map-landmark-label text{fill:#b8cbd2;font-weight:500}
+.map-landmark-label circle{fill:#b8cbd2;stroke:#101722;pointer-events:none}
+.map-resolution{display:flex;flex-direction:column;align-items:flex-end;gap:2px;max-width:260px;text-align:right}
+.map-resolution .aerial-resolution{font-size:9px;color:#b6c4d5;font-weight:400;line-height:1.5}
+.map-reference-options{display:flex;gap:18px;padding-top:14px;margin-top:14px;border-top:1px solid var(--line)}
+.map-reference-options label{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:400;margin:0;min-height:36px}
+.imagery-panel #imagery-detail-status,.imagery-panel #map-reference-status{margin:9px 0 0;font-size:10px;line-height:1.65}
+.imagery-panel #map-reference-retry,.imagery-panel #imagery-detail-retry{font-size:10px;min-height:36px}
+.reference-row .area-icon{color:#b8cbd2}
+.reference-row .area-copy strong{font-size:11px}
+@media(max-width:760px),(max-height:520px){
+ .map-resolution{max-width:210px}
+ .map-resolution .aerial-resolution{font-size:9px}
+}
+@media(max-width:360px){.map-resolution{max-width:180px}}
+
+/* Dated observations keep their own water palette and coverage key. */
+.map-water-image{filter:none;image-rendering:auto}
+.map-flood-image{filter:saturate(.92) brightness(.92) contrast(1.04)}
+.map-event-unknown{pointer-events:none}
+.water-map-key{display:flex;align-items:flex-start;gap:7px;margin-bottom:10px;font-size:10px;line-height:1.5;color:#b7eae2}
+.water-map-key i{height:8px;width:8px;border-radius:2px;background:#42ded3;flex:none;margin-top:3px}
+#historical-example{margin-top:8px;font-size:10px;min-height:32px;text-align:left}
+#historical-example svg{height:13px;width:13px}
+.historical-focuses{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 15px}
+.imagery-panel .historical-focuses .control{width:auto;flex:1 1 105px;margin:0;min-height:38px;padding:7px;font-size:10px;text-align:left;justify-content:flex-start}
+.imagery-panel #historical-note{font-size:10px;line-height:1.7;padding:10px 11px;background:rgba(66,222,211,.045);border:1px solid rgba(66,222,211,.13);border-radius:6px;margin:12px 0}
+.water-view .map-road-line{stroke-opacity:.14}
+.water-view .map-road-line.rank-2{stroke-opacity:.09}
+@media(max-width:760px){.water-map-key{font-size:9px;margin-bottom:7px}#historical-example{font-size:10px;min-height:36px}.imagery-panel{max-height:calc(100% - 105px)}}
+.water-map-key.radar-key i{background:#64c8ff}
+.capture-unknown-key{display:flex;align-items:flex-start;gap:7px;margin-bottom:10px;font-size:9px;line-height:1.5;color:var(--muted)}
+.capture-unknown-key i{height:11px;width:11px;flex:none;border:1px solid var(--line);background:radial-gradient(circle,#adbacb 1px,transparent 1.4px) 0 0/4px 4px}

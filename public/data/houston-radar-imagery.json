@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "id": "harvey-sentinel1-proxy-20170829",
+  "title": "Sentinel-1 radar flood proxy",
+  "date": "2017-08-29",
+  "comparedDate": "2017-08-05",
+  "published": "2017-08-31",
+  "bbox": [
+    -95.94,
+    29.48,
+    -94.99,
+    30.14
+  ],
+  "crs": "EPSG:4326",
+  "width": 3050,
+  "height": 2440,
+  "analysisResolutionMeters": 30,
+  "url": "/data/water/harvey-radar-proxy-2017-08-29.webp",
+  "sha256": "c6de3c13765e45de2a8914dd9f1452b58793cb4ddf67486c86eceab2ace5f05a",
+  "indicatedPixels": 475468,
+  "pixelCount": 7442000,
+  "description": "Light blue marks NASA ARIA’s likely inundation signal from Sentinel-1 radar change between August 5 and 29. Unmarked areas have no positive indication in the published product. Their flood status is unknown. The proxy can miss flooding in built-up areas.",
+  "legend": [
+    {
+      "color": "#64c8ff",
+      "label": "Probable inundation indicated by NASA ARIA"
+    },
+    {
+      "color": "transparent",
+      "label": "No positive proxy indication; flood status unknown"
+    }
+  ],
+  "limitations": "A missing indication does not establish dry ground. The proxy is less reliable over urban areas. It cannot establish water depth, welfare, access or safe travel.",
+  "method": "Nearest-neighbor reprojection of the source GeoTIFF alpha symbols onto the bounded map. Overlapping granule indications are combined. Original indication color is preserved. No optical interpolation, flood classification, or dry class was added.",
+  "attribution": "Contains modified Copernicus Sentinel data (2017), processed by ESA and analyzed by NASA/JPL-Caltech ARIA.",
+  "sourcePage": "https://www.jpl.nasa.gov/images/pia21932-new-nasa-satellite-flood-map-of-southeastern-texas-sentinel-1-data/",
+  "sourceUrl": "https://d1z62tir4fw0q0.cloudfront.net/201708-Hurricane_Harvey/ARIA_FPM_Sentinel-1_v0.2_GeoTIFF.zip",
+  "sourceSha256": "c4bdf14daa1939ec541e7125a25ba371d8d34da43dc5d3e1b10d077b62a750b2",
+  "sourceVersion": "ARIA FPM Sentinel-1 v0.2",
+  "granules": [
+    {
+      "name": "N_s2_01_o0.3_v-0.1.tif",
+      "bbox": [
+        -96.4777798,
+        29.6920405,
+        -95.4830576,
+        30.0284294
+      ],
+      "shape": [
+        1212,
+        3582
+      ]
+    },
+    {
+      "name": "N_s2_02_o0.3_v-0.1.tif",
+      "bbox": [
+        -96.5136434,
+        29.8586447,
+        -95.5169768,
+        30.1947558
+      ],
+      "shape": [
+        1211,
+        3589
+      ]
+    },
+    {
+      "name": "N_s2_03_o0.3_v-0.1.tif",
+      "bbox": [
+        -96.5490201,
+        30.0247815,
+        -95.5506868,
+        30.3608926
+      ],
+      "shape": [
+        1211,
+        3595
+      ]
+    },
+    {
+      "name": "N_s3_01_o0.3_v-0.1.tif",
+      "bbox": [
+        -95.5900901,
+        29.8917141,
+        -94.7070345,
+        30.2053253
+      ],
+      "shape": [
+        1130,
+        3180
+      ]
+    },
+    {
+      "name": "N_s3_02_o0.3_v-0.1.tif",
+      "bbox": [
+        -95.6241684,
+        30.0581159,
+        -94.7394462,
+        30.3714493
+      ],
+      "shape": [
+        1129,
+        3186
+      ]
+    },
+    {
+      "name": "S_s2_07_o0.3_v-0.1.tif",
+      "bbox": [
+        -96.3723368,
+        29.1934654,
+        -95.3817812,
+        29.5301321
+      ],
+      "shape": [
+        1213,
+        3567
+      ]
+    },
+    {
+      "name": "S_s2_08_o0.3_v-0.1.tif",
+      "bbox": [
+        -96.4078279,
+        29.3596442,
+        -95.4156057,
+        29.6963109
+      ],
+      "shape": [
+        1213,
+        3573
+      ]
+    },
+    {
+      "name": "S_s2_09_o0.3_v-0.1.tif",
+      "bbox": [
+        -96.4427211,
+        29.5259688,
+        -95.4493877,
+        29.8623577
+      ],
+      "shape": [
+        1212,
+        3577
+      ]
+    },
+    {
+      "name": "S_s3_07_o0.3_v-0.1.tif",
+      "bbox": [
+        -95.454549,
+        29.2272582,
+        -94.5773267,
+        29.5414249
+      ],
+      "shape": [
+        1132,
+        3159
+      ]
+    },
+    {
+      "name": "S_s3_08_o0.3_v-0.1.tif",
+      "bbox": [
+        -95.4884642,
+        29.3938555,
+        -94.6098531,
+        29.7077444
+      ],
+      "shape": [
+        1131,
+        3164
+      ]
+    },
+    {
+      "name": "S_s3_09_o0.3_v-0.1.tif",
+      "bbox": [
+        -95.5224061,
+        29.5598022,
+        -94.6421283,
+        29.8736911
+      ],
+      "shape": [
+        1131,
+        3170
+      ]
+    },
+    {
+      "name": "S_s3_10_o0.3_v-0.1.tif",
+      "bbox": [
+        -95.5561888,
+        29.7253612,
+        -94.6745221,
+        30.0392501
+      ],
+      "shape": [
+        1131,
+        3175
+      ]
+    }
+  ]
+}

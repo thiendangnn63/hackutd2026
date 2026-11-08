@@ -6,6 +6,7 @@ import { InputError, openCase, sendOutreach, receiveReport, verifyCase, setConse
 import { Store } from './store.js';
 import { SatelliteService } from './satellite.js';
 import { HoustonService } from './houston-service.js';
+import {historicalImagery,historicalImageFile} from './historical-imagery.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const files = {
@@ -14,6 +15,11 @@ const files = {
   '/styles.css': ['styles.css', 'text/css'],
   '/houston.js': ['houston.js', 'text/javascript'],
   '/map-model.js': ['map-model.js', 'text/javascript'],
+  '/imagery-model.js': ['imagery-model.js', 'text/javascript'],
+  '/imagery-layer.js': ['imagery-layer.js', 'text/javascript'],
+  '/labels-model.js': ['labels-model.js', 'text/javascript'],
+  '/reference-layer.js': ['reference-layer.js', 'text/javascript'],
+  '/historical-layer.js': ['historical-layer.js', 'text/javascript'],
   '/ui.js': ['ui.js', 'text/javascript'],
   '/records.js': ['records.js', 'text/javascript'],
   '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
@@ -21,6 +27,9 @@ const files = {
   '/workspace.js': ['workspace.js', 'text/javascript'],
   '/workspace.css': ['workspace.css', 'text/css'],
   '/data/houston-imagery.jpg': ['data/houston-imagery.jpg', 'image/jpeg'],
+  '/data/houston-streets.json': ['data/houston-streets.json', 'application/json'],
+  '/data/houston-landmarks.json': ['data/houston-landmarks.json', 'application/json'],
+  '/data/houston-labels-meta.json': ['data/houston-labels-meta.json', 'application/json'],
   '/data/earth-context.jpg': ['data/earth-context.jpg', 'image/jpeg'],
   '/data/houston-context.jpg': ['data/houston-context.jpg', 'image/jpeg'],
   '/data/houston-metro.png': ['data/houston-metro.png', 'image/png'],
@@ -54,9 +63,25 @@ export function createApp(store = new Store(resolve(root, '.data/state.json')), 
       const url = new URL(req.url, `http://${req.headers.host}`);
       if (req.method === 'GET' && url.pathname === '/api/state') return json(200, store.read());
       if (req.method === 'GET' && url.pathname === '/api/health') return json(200, { ok: true, mode: 'simulation', liveSendingEnabled: false });
+      if (req.method === 'GET' && url.pathname === '/api/houston/imagery') {
+        if(url.search)throw new InputError('Unsupported imagery option.');
+        return json(200,houston.imageryPyramid());
+      }
+      if (req.method === 'GET' && url.pathname.startsWith('/data/imagery/')) {
+        const bytes=houston.imageryTile(url.pathname.slice('/data/imagery/'.length));
+        res.writeHead(200,{'Content-Type':'image/webp'});res.end(bytes);return;
+      }
       if (req.method === 'GET' && url.pathname === '/api/houston') {
         if ([...url.searchParams.keys()].some(key => !['scenario', 'city'].includes(key))) throw new InputError('Unsupported dashboard option.');
         return json(200, houston.view({ scenario: url.searchParams.get('scenario') || 'normal', city: url.searchParams.get('city') || 'houston' }));
+      }
+      if(req.method==='GET'&&url.pathname==='/api/houston/history'){
+        if(url.search)throw new InputError('Unsupported historical imagery option.');
+        return json(200,historicalImagery(root));
+      }
+      if(req.method==='GET'&&/^\/data\/(water|flood-imagery)\//.test(url.pathname)){
+        const file=historicalImageFile(root,url.pathname),bytes=await readFile(file.path);
+        res.writeHead(200,{'Content-Type':file.contentType});res.end(bytes);return;
       }
       if (req.method === 'GET' && url.pathname === '/api/satellite') return json(200, satellite.status());
       if (req.method === 'GET' && url.pathname.startsWith('/api/satellite/images/')) {

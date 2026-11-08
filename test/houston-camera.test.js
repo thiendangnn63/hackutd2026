@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cameraView,zoomAt,fitMapCamera,startGesture,moveGesture} from '../public/map-model.js';
+import {cameraView,resizeMapCamera,zoomAt,fitMapCamera,startGesture,moveGesture} from '../public/map-model.js';
 const city={x:400,y:315,zoom:1};
 test('camera adapts to the real map viewport without letterboxing',()=>{
   assert.deepEqual(cameraView(city,800,630),{x:0,y:0,width:800,height:630});
@@ -94,4 +94,13 @@ test('pinching and dragging a fitted camera honors the supplied floor without a 
   const moved=moveGesture(drag,[{x:1240,y:380}]);
   assert.equal(moved.zoom,pinched.zoom);
   assert.ok(Math.abs(moved.x-(pinched.x-40*unit*fitted.zoom/pinched.zoom))<1e-10);
+});
+
+test('manual resize retains the world center and screen scale within the new zoom limits',()=>{
+  const start={x:211,y:764,zoom:2};
+  const resized=resizeMapCamera(start,1200,800,.4);
+  assert.deepEqual(resized,{x:211,y:764,zoom:3});
+  assert.deepEqual(resizeMapCamera(resized,800,1200,.4),start);
+  assert.equal(resizeMapCamera({...start,zoom:.2},800,2400,.15).zoom,.15);
+  assert.equal(resizeMapCamera({...start,zoom:20},1200,600,.4).zoom,24);
 });

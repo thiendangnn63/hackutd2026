@@ -159,6 +159,11 @@ export function cameraView(camera, width, height) {
   return {x:camera.x-w/2,y:camera.y-h/2,width:w,height:h};
 }
 const minimumZoom=value=>Number.isFinite(value)&&value>0?Math.min(24,Math.max(.01,value)):.4;
+// The screen scale is proportional to viewport width times zoom.
+export function resizeMapCamera(camera,previousWidth,width,minZoom){
+  const zoom=Math.min(24,Math.max(minimumZoom(minZoom),camera.zoom*previousWidth/width));
+  return {...camera,zoom};
+}
 export function fitMapCamera(bounds,width,height,insets={}) {
   const fallback=()=>({x:400,y:315,zoom:1});
   if(!bounds||!['x','y','width','height'].every(key=>Number.isFinite(bounds[key]))||

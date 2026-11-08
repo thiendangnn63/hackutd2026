@@ -54,3 +54,12 @@ The presentation index preserves messages whose case reference is null or no lon
 Hospitality parent scores now aggregate the fixed finest-level fixtures using clipped land area. Known capacity sums across children; unknown inputs stay unknown, mixed utility states expose percentages, and partial coverage is labeled. These remain fictional planning values.
 
 Client state refreshes are guarded by a local revision counter so an older GET cannot supersede a newer mutation response. Successful client actions emit family-action-complete after state rendering; Casework uses that explicit action outcome for navigation, without changing HTTP payloads or domain states. Participant outgoing-history selection uses recipient IDs directly, including unresolved case references.
+
+
+## Geographic detail and historical raster reads
+
+GET `/api/houston` now includes a validated `imageryPyramid`; GET `/api/houston/imagery` retrieves only that manifest for a bounded preparation refresh. `complete` requires every planned tile to exist with valid metadata; `downloading` is false in the completed bundled release. GET `/data/imagery/<manifest-listed .webp>` exposes only the registered local image. Invalid IDs, traversal, missing files and unlisted names return 404.
+
+GET `/api/houston/history` returns separate `water`, `flood` and `radar` product metadata. Water scenes retain the actual acquisition date, 20 m analysis, paired same-date `waterUrl`/`rgbUrl`, quantitative `indexUrl`, validity fraction, source band calibration and masks. Availability is per file/mode; a missing RGB product cannot become a ready true-color image. Flood images retain NOAA flight dates and partial coverage; radar is NASA’s separate 30 m probable-inundation proxy. GET `/data/water/<registered product>` and `/data/flood-imagery/<registered product>` read only files registered by the validated fixed manifests. No arbitrary file, URL proxy, provider credential or remote request is accepted.
+
+The three static geographic-reference JSONs expose named City streets, landmarks and their provenance. These and every historical read are independent of case persistence and do not update welfare, assistance, review or request assignment. Physical hazard imagery can extend beyond city limits; the current request aggregation contract remains Houston-only.
