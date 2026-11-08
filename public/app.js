@@ -38,6 +38,7 @@ async function load() {
 function render() {
   if (!state.cases.some(c => c.id === selectedCaseId)) selectedCaseId = state.cases.at(-1)?.id;
   renderStats(); renderTiles(); renderQueue(); renderCase(); renderSelects(); renderNeeds(); renderMessages(); renderAudit();
+  document.dispatchEvent(new CustomEvent('family-state-changed', {detail:state}));
 }
 function renderStats() {
   const items = [

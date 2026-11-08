@@ -22,6 +22,18 @@ npm test
 
 `check` validates JavaScript syntax and package JSON. `test` runs domain, persistence, and HTTP integration checks. No API keys or internet access are required for any check.
 
+## Map-first workspace
+
+Open **http://127.0.0.1:4173/#mayor** for the redesigned workspace. The navigation rail switches between **Map**, **Messages**, **People**, **Casework**, and **Imagery**; it becomes bottom navigation on mobile.
+
+- Drag, scroll, pinch, or use the zoom controls. Neighborhoods reveal 2×2 subtiles at 2.2× zoom and 4×4 subtiles at 5×. Click or press Enter for on-map statistics. `+` / `−`, arrows, `0`, and Escape provide keyboard navigation. On mobile, **Overview** opens the layer and area panel.
+- **Assistance** uses red intensity for unique open requests, with medical / evacuation / supplies filters and an explicit numeric legend. **Hospitality** uses blue for fictional power/water/access planning scores. Hatching preserves unknown data in both modes. Scores are not approved shelter assessments.
+- Distribution, shelter, and medical markers have individual visibility filters and detail cards. Facility locations, resources, and capacities are fictional planning fixtures, not operating sites.
+- **Imagery** on the map controls the historical aerial mosaic and overlay opacity. The Imagery tab provides a historical-pair dropdown and draggable before/after overlay for the three locally imported Harvey study areas. These pairs are not georeferenced to Houston; they are never overlaid on the city as if they were. Only one georeferenced Houston mosaic is currently bundled, and its acquisition dates vary.
+- **Messages** combines actual local incoming reports and simulated outgoing messages into case conversations. **People** searches names, descriptions, last-known areas, and related message text, and shows raw evidence, observation/receipt times, welfare state, and officer review separately. Changes in Casework immediately update both tabs. The Oak District case data remains separate from Houston's demonstration requests.
+
+Subtile report locations are deterministic synthetic fixtures inside the official neighborhood geometry. Every neighborhood total and overlapping need-category count is conserved at both detail levels. Empty cells and city holes remain clipped out. These coordinates are not real geocoded reports. For implementation details and verified behavior, see [UI workspace notes](docs/UI_WORKSPACE.md).
+
 ## Rehearse the grandparents story
 
 1. Read the **simulated emergency alert**. Viewing it does not enroll anyone.
@@ -59,7 +71,7 @@ The current dataset is a fixed demonstration, not live intake or location assign
 - `public/data/` and `scripts/prepare_houston_geography.py`: attributed official geography, historical aerial image, and reproducible source preparation.
 - `scripts/import_model.py`: checksum-verified model import and local inference verification.
 - `training/`: reproducible from-scratch Kaggle training, local inference, and training tests.
-- `public/`: dependency-free responsive web UI.
+- `public/`: dependency-free responsive map workspace; `map-model.js` supplies geometry, fixture partitioning and camera gestures, `records.js` indexes existing case data, and `workspace.js` handles tab views and imagery comparison.
 - `test/`: executable behavior/security regression tests.
 - `docs/API.md`: shared frontend/backend contract.
 - `docs/INTEGRATIONS.md`: exact boundaries and future integration gates.

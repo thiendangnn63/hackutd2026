@@ -40,3 +40,11 @@ Read-only and independent of persisted family state. Requests are generated fict
 Region result: `{id,name,labelPoint,geometry,openCount,intensity,categories:{medical,evacuation,supplies,other},priority,coverageStatus}`. `intensity=openCount/maxOpenCount`, or zero when no open requests exist. `coverageStatus` is `reported` or `unknown`, never safe. Category counts may overlap; request total counts each current open ID once. Latest valid version wins across city/status changes; resolved wins equal-time ties. Outside-Houston current records are excluded. Unknown region IDs remain visible in `unlocatedRequests` and total open requests, but not map counts.
 
 Review queue orders reported demand medical → evacuation → supplies → other and reserves a coverage-check slot after each group of three reported areas. The interface gives no-report areas their own persistent coverage lane. This is a human-review demo preference, not medical triage, allocation, or dispatch. No HTTP mutation endpoints exist for these fixtures.
+
+## Map workspace presentation
+
+The redesigned browser consumes the existing GET /api/houston, GET /api/state and GET /api/satellite endpoints. No external map provider, new write API, messaging connection, or authentication claim is introduced.
+
+The browser constructs deterministic fictional request coordinates within each region, conserves its request/category totals when partitioning to 2×2 or 4×4 cells, and clips visual cells to the official polygons including holes. Hospitality scores, utility inputs, capacities, and POIs are explicitly fictional client-side planning fixtures, independent of satellite predictions and family welfare. They must be replaced with verified source data before any operational use.
+
+Messages and People derive their indexes only from existing case/participant/report/outbox state. Conversation order uses receipt time for incoming reports and queue time for simulated outgoing messages, while still displaying observation times separately. Source text is inserted as text, never HTML. Local mutation responses trigger a browser state-change event so these views update without persisting duplicate data.
