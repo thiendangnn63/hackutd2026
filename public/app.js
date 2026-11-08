@@ -1,6 +1,7 @@
 import {stateClient} from './state-client.js';
 import {rememberDrafts,restoreDrafts,createCaseDraftStore,readMessageDraft,writeMessageDraft} from './form-drafts.js';
 import {createProposalView,rememberProposalState} from './proposal-view.js';
+import {createPhoneView} from './phone-view.js';
 'use strict';
 let state = null;
 let selectedCaseId = null;
@@ -8,6 +9,7 @@ let busy = false;
 let hasRendered=false,stateDirty=false;
 const caseDrafts=createCaseDraftStore();
 let pendingSmsCaseId=null,exampleMessageDraft=null;
+let phoneView=null,phoneState=null,phoneRefreshTimer=null,phoneStatusReads=0;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
@@ -41,7 +43,7 @@ async function mutate(path, payload, success, onResult) {
   if (busy) return;
   const actionFocus=rememberDrafts(),actionRoute=location.hash;
   busy = true; const buttons = $$('button'); buttons.forEach(b => { b.dataset.wasDisabled = b.disabled ? 'true' : 'false'; b.disabled = true; });
-  document.body.setAttribute('aria-busy','true'); notify('Processing local simulation…');
+  document.body.setAttribute('aria-busy','true'); notify('Processing demo action…');
   try { const result = await request(path,payload); if (onResult) onResult(result); render(); notify(result.duplicate ? 'Duplicate event recognized. No additional reports or messages were created.' : (typeof success === 'function' ? success(result) : success)); document.dispatchEvent(new CustomEvent('family-action-complete',{detail:{path,duplicate:Boolean(result.duplicate)}})); }
   catch (error) { notify(error.message, true); }
   finally { busy = false; if(stateDirty&&state)render(); document.body.removeAttribute('aria-busy'); buttons.forEach(b => { if (b.isConnected) { b.disabled = b.dataset.wasDisabled === 'true'; delete b.dataset.wasDisabled; } });
@@ -60,6 +62,7 @@ function render() {
   if (!state.cases.some(c => c.id === selectedCaseId)) selectedCaseId = state.cases.at(-1)?.id;
   renderStats(); renderTiles(); renderQueue(); renderCase(); renderSelects(); renderNeeds(); renderMessages(); renderAudit();
   restoreVerificationDraft();if(drafts)restoreDrafts(document,{...drafts,forms:drafts.forms.filter(form=>form.id==='case-form')});hasRendered=true;stateDirty=false;
+  phoneView?.update(phoneState||{},state);
   document.dispatchEvent(new CustomEvent('family-state-changed', {detail:state}));
 }
 function renderStats() {
@@ -105,7 +108,7 @@ function renderCase() {
   reports.forEach(r=>{
     const card=el('article','evidence'); const head=el('div','evidence-header'); const select=el('label','evidence-select'); const check=el('input'); check.type='checkbox'; check.name='evidenceIds'; check.value=r.id; check.disabled=Boolean(c.verification)||Boolean(r.modelReview&&r.modelReview.status!=='accepted'); select.append(check,document.createTextNode(`${r.id} · ${person(r.senderId)}`)); head.append(select,tag(r.processingState==='needs_review'?'Needs review':'Reported, not verified', 'amber')); card.append(head,el('p','evidence-text',r.text),el('small','',`Observed ${formatTime(r.observedAt)} · ${label(r.processingPath)}`));
     (r.observations || []).forEach(o=>{ const observation=el('div','observation'); observation.append(el('strong','',label(o.type)),el('p','',o.summary)); if(o.sourceSpan) observation.append(el('p','',`Source: “${o.sourceSpan}”`)); card.append(observation); });
-    const proposal=createProposalView(r);if(proposal)card.append(proposal);
+    const proposal=createProposalView(r,{onReview:decision=>mutate(`/api/reports/${encodeURIComponent(r.id)}/review`,decision,decision.action==='accept'?'Reported observations accepted. Welfare still requires direct confirmation.':'Suggestions dismissed. The original message remains available.')});if(proposal)card.append(proposal);
     if(r.reviewFlags?.length) card.append(el('p','review-flag',`Review flags: ${r.reviewFlags.map(label).join(' · ')}`)); evidenceList.append(card);
   });
   if(!reports.length) evidenceList.append(empty('No evidence received. The case remains open. Silence is not a safety signal.'));
@@ -145,6 +148,33 @@ $('#sms-form').addEventListener('submit',event=>{event.preventDefault();const da
 $('#example').addEventListener('click',()=>{const form=$('#case-form');form.elements.subjectNames.value='Rosa and Miguel Santos';form.elements.description.value='Mom is looking for her parents, Rosa and Miguel Santos. Last contact was before the road closures. Please ask nearby opted-in neighbors for a recent sighting.';form.elements.lastKnownTile.value='A1';form.elements.lastContactAt.value='2026-11-07T12:00';$$('input[name=searchTiles]',form).forEach(c=>c.checked=c.value==='A1');form.elements.consentToOutreach.checked=true;rememberMessageDraft();exampleMessageDraft={text:'I saw Rosa and Miguel at Oak School. They need water for two people and the road is blocked.',senderId:'neighbor-1',observedAt:'2026-11-07T14:20',providerEventId:caseDrafts.nextMessageId(providerIds()),simulateFailure:false};notify('Grandparents inquiry filled in. Its example SMS will be ready in Message lab after you create the case.');$('#family').scrollIntoView({behavior:'smooth',block:'start'});form.elements.subjectNames.focus({preventScroll:true});});
 $('#sms-case').addEventListener('change',event=>targetMessageCase(event.detail?.caseId||event.currentTarget.value));
 for(const [selector,key]of [['#case-form button[type=submit]','intake-submit'],['#sms-form button[type=submit]','message-submit']])$(selector).dataset.recordFocus=key;
+async function refreshPhoneStatus(){
+  clearTimeout(phoneRefreshTimer);
+  try{
+    const response=await fetch('/api/phone/status');if(!response.ok)throw new Error('Phone status unavailable');
+    phoneState=await response.json();phoneView?.update(phoneState,state||{cases:[],reports:[]});
+    const summary=$('#casework-view footer>span');if(summary)summary.textContent=phoneState.enabled?'Phone test configured · Model test '+(phoneState.modelConfigured?'configured':'off')+' · Broadcast simulated':'Photon not connected · Nemotron extraction simulated · Broadcast simulated';
+    if(phoneState.listening&&phoneStatusReads++<60)phoneRefreshTimer=setTimeout(refreshPhoneStatus,2000);
+  }catch{phoneView?.update({...phoneState,statusUnavailable:true},state||{cases:[],reports:[]});}
+}
+async function phoneAction({action,reportId}={}){
+  const paths={listen:'/api/phone/listen',stop:'/api/phone/stop',poll:'/api/phone/poll',interpret:`/api/reports/${encodeURIComponent(reportId||'')}/interpret`,prepare:`/api/reports/${encodeURIComponent(reportId||'')}/reply/prepare`,send:`/api/reports/${encodeURIComponent(reportId||'')}/reply/send`,retry:`/api/reports/${encodeURIComponent(reportId||'')}/reply/send`,delivery:`/api/reports/${encodeURIComponent(reportId||'')}/reply/delivery`};
+  if(!paths[action])return;
+  phoneStatusReads=0;
+  await mutate(paths[action],action==='retry'?{manualRetry:true}:{},result=>{
+    const outcome=result.phoneAction||{};
+    const provider=result.phone?.mode==='fixture'?'Mock provider':'Photon';
+    if(action==='send'||action==='retry')return outcome.status==='failed'?`${provider} reported that the reply failed.`:outcome.status==='accepted'?`${provider} accepted the reply. Delivery has not been confirmed.`:'Reply outcome is not confirmed. Check its status before retrying.';
+    if(action==='delivery')return outcome.delivered?`${provider} confirmed delivery.`:'Delivery is not confirmed. See the reply status.';
+    return {listen:'Listening for the approved phone test.',stop:'Phone listening stopped.',poll:'Phone check complete. Incoming reports are saved for review.',interpret:'Interpretation finished. Review the original message and suggestions.',prepare:'The exact demo reply is prepared for sending.'}[action];
+  },result=>{if(result.phone)phoneState=result.phone;});
+  await refreshPhoneStatus();
+}
+phoneView=createPhoneView($('#phone-controls'),{onAction:phoneAction,onOpenReport(reportId){
+  const report=state?.reports.find(item=>item.id===reportId);if(!report||!state.cases.some(item=>item.id===report.caseId))return;
+  selectedCaseId=report.caseId;render();location.hash='casework';requestAnimationFrame(()=>$('#case-detail h2')?.focus({preventScroll:false}));
+}});
+refreshPhoneStatus();
 stateClient.subscribe(next=>{
   state=next;stateDirty=true;
   if(!busy){render();$('#workspace').hidden=false;$('#loading').hidden=true;$('#load-error').hidden=true;}

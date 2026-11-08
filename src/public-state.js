@@ -26,7 +26,15 @@ function project(value) {
   for (const [key, item] of Object.entries(value)) {
     if (internal.has(key)) continue;
     if (key === 'modelReview') {
-      if (object(item)) result.modelReview = { status: typeof item.status === 'string' ? item.status : 'unknown', proposal: proposalView(item.proposal) };
+      if (object(item)) {
+        const review = { status: typeof item.status === 'string' ? item.status : 'unknown', proposal: proposalView(item.proposal) };
+        if (typeof item.proposalToken === 'string' && /^[a-f0-9]{64}$/.test(item.proposalToken)) review.proposalToken = item.proposalToken;
+        const decision = item.reviewDecision;
+        if (object(decision) && ['accepted', 'dismissed'].includes(decision.action) && typeof decision.reviewerName === 'string' && typeof decision.note === 'string' && Array.isArray(decision.observationIndices)) {
+          review.reviewDecision = { action: decision.action, reviewerName: decision.reviewerName, note: decision.note, observationIndices: decision.observationIndices.filter(Number.isInteger), reviewedAt: decision.reviewedAt };
+        }
+        result.modelReview = review;
+      }
       continue;
     }
     Object.defineProperty(result, key, { value: project(item), enumerable: true, configurable: true, writable: true });

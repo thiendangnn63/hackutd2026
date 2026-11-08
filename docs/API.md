@@ -6,7 +6,7 @@ State:
 - `mode: 'simulation'`, `scenarioTime` ISO timestamp, `incident: {id,name,active,tiles:['A1','A2','B1','B2'],policy:{maxTiles:2,locationMaxAgeMinutes:120,maxRecipients:20}}`
 - `participants: [{id,name,phone,currentTile,locationReportedAt,optedIn,source:'fixture'}]` (555 fictional numbers only)
 - `cases: [{id,subjectNames,description,reporterId,lastKnownTile,lastContactAt,searchTiles,consentToOutreach,reviewState:'open'|'awaiting_review'|'follow_up_requested'|'resolved',locationState:'unknown'|'unverified_sighting'|'verified_location',welfareState:'unknown'|'confirmed_safe'|'assistance_needed',outreachState:'needs_review'|'ready'|'queued'|'stopped',createdAt,reportIds,verification:null|{officerName,note,evidenceIds,verifiedAt},policyReasons:[]}]`
-- `reports: [{id,providerEventId,senderId,caseId,text,observedAt,receivedAt,processingState:'processed'|'needs_review',processingPath:'deterministic'|'simulated_extraction'|'failed',observations:[{id,type:'sighting'|'self_check_in'|'water_need'|'road_blockage'|'correction'|'unknown',summary,sourceSpan,quantity:null|number,location:null|string,verification:'reported'}],reviewFlags:[]}]`
+- `reports: [{id,providerEventId,senderId,caseId,text,observedAt,receivedAt,processingState:'processed'|'needs_review',processingPath:'deterministic'|'simulated_extraction'|'failed'|'raw_inbox',observations:[{id,type:'sighting'|'self_check_in'|'water_need'|'road_blockage'|'correction'|'unknown',summary,sourceSpan,quantity:null|number,location:null|string,verification:'reported'}],reviewFlags:[]}]`
 - `assistance: [{id,caseId,reportId,type,summary,status:'unassigned'|'completed'}]`
 - `outbox: [{id,caseId,recipientId,kind:'inquiry'|'acknowledgment'|'family_update',text,status:'simulated',createdAt}]`
 - `audit: [{id,at,action,detail}]`; `integrations:{photon:'not_connected',nemotron:'simulated',broadcast:'simulated'}`
@@ -43,7 +43,7 @@ Review queue orders reported demand medical → evacuation → supplies → othe
 
 ## Map workspace presentation
 
-The redesigned browser consumes the existing GET /api/houston, GET /api/state and GET /api/satellite endpoints. No external map provider, new write API, messaging connection, or authentication claim is introduced.
+The map and imagery views consume GET /api/houston, GET /api/state and GET /api/satellite. The bounded messaging and model actions belong to Casework.
 
 The backend exposes explicit, canonical fictional request coordinates and categories in each region’s `requestLocations`. The browser conserves those same request IDs/counts/categories when partitioning to 2×2 or 4×4 cells and clips visual cells to the official polygons including holes. Facilities use explicit region IDs and coordinates from the covered-location manifest. Hospitality scores, utility inputs, capacities, and POIs remain fictional planning fixtures, independent of satellite predictions and family welfare. They must be replaced with verified source data before any operational use.
 
@@ -72,13 +72,25 @@ GET `/data/houston-observation-coverage.json` is a fixed local static read for o
 
 GET `/api/events` sends native Server-Sent Events with `{sessionId,revision,state}` and event IDs `${sessionId}:${revision}`. A connection receives the current snapshot, then committed Store updates. The existing loopback Host/Origin guards apply before subscribing. Heartbeats keep idle connections alive; blocked connections retain only their newest pending state and eventually disconnect. Closing a connection removes its Store observer. Read/subscription/reconnect never rewrites the saved exercise.
 
-GET `/api/state` and successful family mutation responses include `X-Beacon-Session` and `X-Beacon-Revision` headers. HTTP and stream snapshots share a public projection that removes provider identity and private extraction-job material. A raw report's `modelReview` exposes only a status and a validated review proposal. No public intake, completion, acceptance or provider endpoint is added.
+GET `/api/state` and successful family mutation responses include `X-Beacon-Session` and `X-Beacon-Revision` headers. HTTP and stream snapshots share a public projection that removes provider identity and private extraction-job material. Raw reports expose only the review fields needed by the UI. Provider envelopes and credentials stay private. Proposal decisions and redacted phone actions are documented below.
 
-## Inactive raw inbox preparation
+## Phone controls and proposal review
 
-`src/report-inbox.js` provides synchronous raw capture and durable leased extraction actions plus an explicitly enabled asynchronous runner with an injected extractor. The server does not start that runner or configure a provider. Capture requires synthetic data, a known fixture sender alias and an explicit existing case or no case. Provider/project/message identity is namespaced and deduplicated; changed content under the same identity is rejected. Original text persists before work starts.
+The normal server exposes an offline status and returns 409 for phone actions. The optional launcher injects a runtime. All mutations below require a same-origin POST with a JSON object. Successful actions return the projected exercise state and revision headers. Phone actions also return `phone` status and a redacted `phoneAction` result. [Operator guide](PHONE_DEMO.md)
 
-Suggestions stay under `modelReview.proposal`; `observations` remains empty. Failed, stale, queued and proposed reports remain visible for review independently of an earlier resolved case. Suggestions cannot verify welfare, add assistance, dispatch or send replies. Exact STOP revokes the fictional sender's consent deterministically; CHECKIN requests review without reenrollment. There is no acceptance/dismissal workflow in this preparation. The caller must enforce consent, data scope, recipient scope and a spending cap before ever injecting a real model client.
+| Route | Request and effect |
+| --- | --- |
+| GET `/api/phone/status` | Returns `mode` (offline, fixture or live-test), configuration flags, listening and sending eligibility, window end, model usage and limit, exact approved reply text, eligible local report IDs and redacted reply states. Runtime counters include captured, quarantined, queued, proposed and failed reports and poll usage. Configuration does not establish delivery. |
+| POST `/api/phone/listen` | `{}` starts bounded polling within the approved time window. Up to 10 polls per Listen and up to 20 per scope. |
+| POST `/api/phone/stop` | `{}` stops the listener. The sender’s STOP command separately revokes outreach consent. |
+| POST `/api/phone/poll` | `{}` checks inbound messages once. New eligible queued reports can consume a hosted model request after capture. |
+| POST `/api/reports/:reportId/interpret` | `{}` requests interpretation for an eligible queued report, within the three-request model cap. |
+| POST `/api/reports/:reportId/review` | Send `action` (`accept` or `dismiss`), `reviewerName`, `note` and `expectedProposalToken`. For acceptance, `observationIndices` selects a subset. Omitting it accepts all supported observations. The current source and token must match. An identical repeated decision is idempotent. |
+| POST `/api/reports/:reportId/reply/prepare` | `{}` approves the configured fixed wording against the captured parent. The server persists a reply key before any dispatch. |
+| POST `/api/reports/:reportId/reply/send` | `{}` sends an approved reply. After an ambiguous attempt, `{"manualRetry":true}` explicitly retries the same key within the two-attempt cap. An accepted send has `delivered:false`. A known failure is terminal. |
+| POST `/api/reports/:reportId/reply/delivery` | `{}` checks a previously accepted message with its recorded provider ID and channel. The journal permits up to four delivery checks. |
+
+Incoming reports keep raw source text and may have no observation time. `modelReview` exposes status, validated proposal, token and decision as applicable. `observations` remains empty until the reviewer accepts selected facts as reported evidence. Dismissal retains the original. Commands bypass model inference. Exact STOP revokes consent and CHECKIN goes to enrollment review. Neither review nor provider delivery changes welfare, assistance or outreach.
 
 Casework preserves in-progress intake/message/verification fields, selected evidence, text caret, proposal disclosure and reading position during background updates. Verification drafts are case-scoped. People and Messages retain their selected record and source-message focus.
 

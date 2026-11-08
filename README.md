@@ -2,7 +2,7 @@
 
 A working **local, fictional disaster-response demo** for the grandparents inquiry story. A family member opens a contact concern, the app selects eligible community participants, a simulated SMS sighting becomes unverified evidence, and a demo officer records a verified outcome while any assistance request stays open.
 
-**This is not an emergency service. Do not enter real personal, patient, or emergency information.** Nothing is sent to a phone, an AI provider, a public alert network, or a remote database. The interface labels simulated components throughout.
+**This is not an emergency service. Do not enter real personal, patient, or emergency information.** The ordinary launcher keeps all family messaging and text extraction local. An optional, explicitly configured phone test can use Photon iMessage and hosted NVIDIA Nemotron with synthetic data.
 
 ## Run
 
@@ -21,6 +21,10 @@ npm test
 ```
 
 `check` validates JavaScript syntax and package JSON. `test` runs domain, persistence, and HTTP integration checks. No API keys or internet access are required for any check.
+
+## Optional iPhone and Nemotron demo
+
+For one consenting iPhone sender and fictional case C104, run `npm run demo:phone -- --config .data/phone-demo.json` with the normal server stopped. Casework can receive the exact approved iMessage report, show Nemotron proposals for human review, and separately approve, send and check delivery of one fixed reply. The demo uses the free hosted Lightning endpoint without provisioning a GPU. [Phone demo setup, limits and restart behavior](docs/PHONE_DEMO.md)
 
 ## Map-first workspace
 
@@ -82,23 +86,21 @@ The current dataset is a fixed demonstration, not live intake or location assign
 - `docs/API.md`: shared frontend/backend contract.
 - `docs/INTEGRATIONS.md`: exact boundaries and future integration gates.
 
-The local data file `.data/state.json` and `.env` are ignored by Git. The app does not read any key for an external service. Adding a key to `.env` cannot activate a send or inference call.
+The local data file `.data/state.json` and `.env` are ignored by Git. Provider credentials alone cannot activate messaging or hosted inference in the normal app. The optional phone launcher validates its private scope before reading the two required credentials.
 
 ## What works versus what is pending
 
 **Implemented:** local case intake; stored reports; scoped dry-run recipient selection; simulated SMS inquiry/acknowledgment/family updates; source/time-linked observations; duplicate suppression; opt-out; officer evidence review; separate assistance state; restart persistence; reset; and a browser console. The Houston-only mayor dashboard adds real geographic boundaries, historical aerial context, proportional fictional request counts, categories, and coverage/urgent review. An optional historical satellite panel supports verified model bundles, cached predictions, and local inference when checkpoint verification passes.
 
-**Simulated:** emergency alert, every SMS, model extraction, all people/locations, and the officer identity. The extraction parser recognizes scripted examples and conservatively routes other input to review. It is not suitable for real incoming reports.
+**Normal exercise.** Emergency alerts, outbound SMS, message-lab extraction, family records and the officer identity are simulated. The extraction parser recognizes scripted examples and conservatively routes other input to review. It is not suitable for real incoming reports.
 
-**Not integrated:** Photon provisioning or webhooks, real send/reply/delivery tests, Lightning/Nano Omni inference, arbitrary satellite or resident-photo uploads, real authentication/roles, secure photo uploads, retention policy, agency authorization, and production deployment. This milestone does not satisfy the live-SMS acceptance criterion yet. Satellite predictions are available only after a trusted trained bundle is imported locally.
+**Optional phone test.** The integration supports a scoped shared iMessage line, a hosted Lightning text model, officer acceptance or dismissal, fixed reply approval and explicit delivery checks. Fixture tests exercise these paths. The demo still needs a live phone exchange and model run to establish account-specific operation. Carrier SMS, production authentication, agency authorization and resident-photo handling remain outside this demo.
 
 The Houston dashboard does not yet ingest real reports, geocode addresses, update request status, or assign outreach. It does not overlay the historical Harvey classifier results onto current Houston boundaries: the bundled model crops do not provide a verified geographic placement contract.
 
-## Before any real integration
+## Integration configuration
 
-Keep credentials in the git-ignored `.env`, never in chat, frontend files, a notebook, or a commit. Use `.env.example` as the template. Do not enter a key until the integration step needs it.
-
-Live messaging needs the exact Photon product/API and number verified, secure webhook authentication, consented test recipients, message content/purpose, and an explicit total spending limit within available credits. Existing credits are not a guarantee of zero charges. Live model inference likewise needs account access, input restrictions, and cost approval confirmed. The offline demo will continue to work without them.
+Use a git-ignored environment file for provider credentials and the private test configuration under `.data/`. The test scope limits the recipient, exact wording, time window and requests. Configure the account for zero paid spend before starting. [Phone demo guide](docs/PHONE_DEMO.md)
 
 Do not expose this server publicly. Demo role selection is not authorization. Production requires authenticated users, case-scoped access controls, secure identifiers, protected storage, data minimization/retention, rate limiting, audit controls, and an approved incident/verification policy.
 
@@ -134,8 +136,3 @@ With the existing Python environment, install Shapely from the official PyPI reg
 With the existing Python environment, `.venv/bin/python scripts/prepare_context_imagery.py --offline-check` decodes the three context rasters and validates their recorded dimensions and SHA-256 checksums without network access.
 
 For source methods, coverage, native sampling, numeric index encoding and offline verification commands, see [Houston imagery provenance](docs/HOUSTON_DATA.md). The checked-in reference detail pyramid is approximately 245 MiB; raw satellite COGs and provider tile caches remain outside the repository.
-
-
-## Provider connection preparation
-
-Photon 2 and Nemotron clients are fixture-tested in `src/photon-client.js` and `src/nemotron-client.js`. They are inactive and not wired to the app. The normal family exercise stays offline, text extraction remains simulated, and real sending remains disabled. The [integration notes](docs/INTEGRATIONS.md#inactive-provider-clients--november-8-preparation) describe the tested contracts and the remaining authenticated end-to-end acceptance.

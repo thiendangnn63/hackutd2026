@@ -623,3 +623,14 @@ input[type=checkbox],input[type=range]{accent-color:var(--blue)}
 @media(max-width:760px) and (max-height:600px) and (orientation:portrait){
  .map-detail{left:12px;right:12px;bottom:48px;width:auto;max-height:46%}
 }
+
+#phone-controls .phone-panel{margin:0 0 18px;padding:14px 18px}
+.phone-panel summary{cursor:pointer}
+.phone-panel summary .workspace-note{margin-inline-start:12px}
+.phone-panel-body{display:grid;gap:12px;padding-top:14px}
+.phone-actions{display:flex;align-items:center;flex-wrap:wrap;gap:7px}
+.phone-actions [aria-disabled=true]{opacity:.5;cursor:default}
+.phone-reply{border-top:1px solid var(--line);padding-top:12px}
+.phone-reply blockquote{margin:8px 0;white-space:pre-wrap}
+.phone-reply .phone-actions{margin-top:8px}
+.phone-panel [role=status]:empty{display:none}

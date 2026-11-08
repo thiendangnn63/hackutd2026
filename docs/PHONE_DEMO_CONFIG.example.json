@@ -1,0 +1,39 @@
+{
+  "approved": false,
+  "scope": {
+    "id": "owner-approved-imessage-test-1",
+    "projectId": "pho_prj_REPLACE_WITH_CANONICAL_PROJECT_ID",
+    "platform": "imessage",
+    "agentUsrId": "pho_usr_REPLACE_WITH_CANONICAL_AGENT_ID",
+    "from": "REPLACE_WITH_APPROVED_WINDOW_START_ISO",
+    "to": "REPLACE_WITH_APPROVED_WINDOW_END_ISO",
+    "maxPages": 1,
+    "maxMessages": 5,
+    "maxPolls": 20,
+    "dataClass": "synthetic"
+  },
+  "identities": [
+    {
+      "projectId": "pho_prj_REPLACE_WITH_CANONICAL_PROJECT_ID",
+      "platform": "imessage",
+      "personUsrId": "pho_usr_REPLACE_WITH_CANONICAL_CONSENTING_PERSON_ID",
+      "spaceId": "pho_spc_REPLACE_WITH_CANONICAL_DIRECT_SPACE_ID",
+      "agentUsrId": "pho_usr_REPLACE_WITH_CANONICAL_AGENT_ID",
+      "fixtureAlias": "neighbor-1",
+      "caseId": "C104",
+      "approvedTexts": [
+        "I saw Elena at Oak School. They need water for two people and the road is blocked."
+      ]
+    }
+  ],
+  "replyApproval": {
+    "personUsrId": "pho_usr_REPLACE_WITH_CANONICAL_CONSENTING_PERSON_ID",
+    "spaceId": "pho_spc_REPLACE_WITH_CANONICAL_DIRECT_SPACE_ID",
+    "fixtureAlias": "neighbor-1",
+    "caseId": "C104",
+    "text": "Beacon fictional test: Your report was received for human review. This does not confirm safety or that help has been assigned.",
+    "maxSendRequests": 2,
+    "maxDeliveryChecks": 4
+  },
+  "maxModelRequests": 3
+}

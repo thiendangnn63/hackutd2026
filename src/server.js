@@ -8,6 +8,8 @@ import { SatelliteService } from './satellite.js';
 import { HoustonService } from './houston-service.js';
 import {historicalImagery,historicalImageFile} from './historical-imagery.js';
 import { publicState } from './public-state.js';
+import { InboxError, acceptReportProposal, dismissReportProposal } from './report-inbox.js';
+import { PhoneRuntimeError } from './phone-runtime.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const files = {
@@ -29,6 +31,7 @@ const files = {
   '/state-client.js': ['state-client.js', 'text/javascript'],
   '/proposal-view.js': ['proposal-view.js', 'text/javascript'],
   '/form-drafts.js': ['form-drafts.js', 'text/javascript'],
+  '/phone-view.js': ['phone-view.js', 'text/javascript'],
   '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
   '/beacon-logo.svg': ['beacon-logo.svg', 'image/svg+xml'],
   '/workspace.js': ['workspace.js', 'text/javascript'],
@@ -44,7 +47,7 @@ const files = {
   '/data/houston-metro.png': ['data/houston-metro.png', 'image/png'],
 };
 async function body(req) {
-  if (!String(req.headers['content-type'] || '').startsWith('application/json')) throw new InputError('Use application/json.', 415);
+  if (!/^application\/json(?:\s*;[^\r\n]*)?$/i.test(String(req.headers['content-type'] || ''))) throw new InputError('Use application/json.', 415);
   let bytes = 0, data = '';
   for await (const chunk of req) {
     bytes += chunk.length;
@@ -107,7 +110,7 @@ export function openStateStream(res, store, { heartbeatMs = 15_000, backpressure
   return cleanup;
 }
 
-export function createApp(store = new Store(resolve(root, '.data/state.json')), satellite = new SatelliteService(root), houston = new HoustonService(root)) {
+export function createApp(store = new Store(resolve(root, '.data/state.json')), satellite = new SatelliteService(root), houston = new HoustonService(root), {phone = null} = {}) {
   return createServer(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -131,7 +134,12 @@ export function createApp(store = new Store(resolve(root, '.data/state.json')), 
         if (url.search) throw new InputError('Unsupported state stream option.');
         openStateStream(res, store); return;
       }
-      if (req.method === 'GET' && url.pathname === '/api/health') return json(200, { ok: true, mode: 'simulation', liveSendingEnabled: false });
+      const phoneStatus = () => phone ? phone.status() : {enabled:false,phoneConfigured:false,modelConfigured:false,listening:false,sendingEnabled:false,mode:'offline',endsAt:null,modelUsed:0,modelLimit:3,replyText:null,eligibleReportIds:[],replyStates:[]};
+      if (req.method === 'GET' && url.pathname === '/api/health') return json(200, { ok: true, mode: 'simulation', liveSendingEnabled: Boolean(phoneStatus().sendingEnabled) });
+      if (req.method === 'GET' && url.pathname === '/api/phone/status') {
+        if(url.search)throw new InputError('Unsupported phone status option.');
+        return json(200,phoneStatus());
+      }
       if (req.method === 'GET' && url.pathname === '/api/houston/imagery') {
         if(url.search)throw new InputError('Unsupported imagery option.');
         return json(200,houston.imageryPyramid());
@@ -161,8 +169,33 @@ export function createApp(store = new Store(resolve(root, '.data/state.json')), 
         if (!req.headers.origin) throw new InputError('Same-origin requests are required for mutations.', 403);
         const input = await body(req);
         if (url.pathname === '/api/satellite/infer') return json(200, await satellite.infer(input));
+        const phoneAction = url.pathname.match(/^\/api\/phone\/(listen|stop|poll)$/);
+        const reportPhoneAction = url.pathname.match(/^\/api\/reports\/(R-[a-zA-Z0-9-]+)\/(interpret|reply\/(prepare|send|delivery))$/);
+        if (phoneAction || reportPhoneAction) {
+          if(url.search)throw new InputError('Unsupported phone action option.');
+          if (!phone) throw new InputError('The phone and model test is not configured.',409);
+          const action = phoneAction?.[1] || reportPhoneAction[3] || reportPhoneAction[2];
+          if(Object.keys(input).some(key=>action!=='send'||key!=='manualRetry') || (input.manualRetry!==undefined&&typeof input.manualRetry!=='boolean')) throw new InputError('Unsupported phone action input.');
+          const reportId = reportPhoneAction?.[1];
+          let result;
+          if(action==='listen')result=await phone.startListening();
+          else if(action==='stop')result=await phone.stopListening();
+          else if(action==='poll')result=await phone.pollOnce();
+          else if(action==='interpret')result=await phone.interpretOne(reportId);
+          else if(action==='prepare')result=await phone.prepareReply(reportId);
+          else if(action==='send')result=await phone.sendReply(reportId,{manualRetry:input.manualRetry===true});
+          else if(action==='delivery')result=await phone.checkDelivery(reportId);
+          return stateJson(200,{...store.read(),phone:phoneStatus(),phoneAction:result});
+        }
         if (url.pathname === '/api/cases') return stateJson(201, store.act(openCase, input));
         if (url.pathname === '/api/reports') return stateJson(200, store.act(receiveReport, input));
+        const review = url.pathname.match(/^\/api\/reports\/(R-[a-zA-Z0-9-]+)\/review$/);
+        if (review) {
+          if(url.search)throw new InputError('Unsupported proposal review option.');
+          if (Object.keys(input).some(key => !['action','reviewerName','note','expectedProposalToken','observationIndices'].includes(key)) || !['accept','dismiss'].includes(input.action)) throw new InputError('Choose accept or dismiss for this proposal.');
+          const { action, ...decision } = input;
+          return stateJson(200, store.act(action === 'accept' ? acceptReportProposal : dismissReportProposal, { ...decision, reportId: review[1] }));
+        }
         if (url.pathname === '/api/reset') return stateJson(200, store.reset());
         const caseAction = url.pathname.match(/^\/api\/cases\/(C\d+)\/(outreach|verify)$/);
         if (caseAction) return stateJson(200, store.act(caseAction[2] === 'outreach' ? sendOutreach : verifyCase, caseAction[1], input));
@@ -176,7 +209,7 @@ export function createApp(store = new Store(resolve(root, '.data/state.json')), 
       }
       return json(404, { error: 'Not found.' });
     } catch (error) {
-      if (error instanceof InputError) return json(error.status, { error: error.message });
+      if (error instanceof InputError || error instanceof InboxError || error instanceof PhoneRuntimeError) return json(error.status, { error: error.message });
       console.error('Request failed:', error.message);
       return json(500, { error: 'The demo could not save this action. Existing data was preserved.' });
     }
