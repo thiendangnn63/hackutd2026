@@ -48,7 +48,7 @@ test('human acceptance publishes canonical reported observations with server IDs
   const { store, caseId } = setup(), reportId = ready(store, caseId), before = store.read(), source = raw(store, reportId);
   const input = reviewInput(store, reportId), originalInput = structuredClone(input);
   assert.match(source.modelReview.proposalToken, /^[a-f0-9]{64}$/);
-  assert.equal(source.modelReview.proposalToken,createHash('sha256').update(JSON.stringify({version:1,reportId,sourceHash:source.modelReview.sourceHash,proposal:source.modelReview.proposal})).digest('hex'));
+  assert.equal(source.modelReview.proposalToken,createHash('sha256').update(JSON.stringify({version:1,reportId,sourceHash:source.modelReview.sourceHash,extractorSource:'nvidia_nemotron',proposal:source.modelReview.proposal})).digest('hex'));
   assert.notEqual(source.modelReview.proposalToken, source.modelReview.sourceHash);
   assert.deepEqual(source.observations, []);
   const result = store.act(acceptReportProposal, input), report = raw(store, reportId);

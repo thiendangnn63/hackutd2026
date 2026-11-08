@@ -46,7 +46,7 @@ test('default server phone routes remain off with unchanged simulation state and
 
 test('same-origin phone commands delegate only their exact action and retain versioned full-state response shape',async t=>{
   const phone=fakePhone(),{call,store}=await server(t,{phone}),before=store.read();
-  assert.equal((await call('/api/health')).data.liveSendingEnabled,true);
+  assert.equal((await call('/api/health')).data.liveSendingEnabled,false);
   for(const [index,path] of paths.entries()){
     const result=await call(path,{method:'POST',body:{}});assert.equal(result.status,200,path);
     assert.deepEqual(result.data.cases,before.cases);assert.deepEqual(result.data.assistance,[]);assert.deepEqual(result.data.outbox,[]);

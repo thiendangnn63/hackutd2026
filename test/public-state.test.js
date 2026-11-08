@@ -41,3 +41,15 @@ test('missing/unvalidated proposal envelopes remain unavailable rather than asse
     assert.deepEqual(result.reports[0].modelReview, { status: 'running', proposal: null });
   }
 });
+
+
+test('public extractor provenance is allowlisted and a local proposal cannot masquerade as Nemotron',()=>{
+  const proposal={observations:[],reviewFlags:['model_output_needs_review'],processingPath:'local_demo_rules',requiresReview:true};
+  const view=(extractorSource,value=proposal)=>publicState({reports:[{modelReview:{status:'proposal_ready',extractorSource,proposal:value,claim:{extractorSource:'private-claim',token:'private-token'}}}]}).reports[0].modelReview;
+  assert.equal(view('local_demo_rules').extractorSource,'local_demo_rules');
+  assert.equal(view('local_demo_rules').proposal.processingPath,'local_demo_rules');
+  assert.equal(view('nvidia_nemotron').proposal,null);
+  assert.equal(view(undefined).proposal,null);
+  const invalid=view('private-provider-name');assert.equal(invalid.extractorSource,undefined);assert.equal(invalid.proposal,null);
+  assert.doesNotMatch(JSON.stringify(view('local_demo_rules')),/private-/);
+});

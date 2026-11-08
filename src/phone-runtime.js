@@ -12,8 +12,9 @@ const reportId=value=>typeof value==='string'&&/^R-[A-Za-z0-9-]{1,100}$/.test(va
 const replyStatuses=new Set(['prepared','sending','unknown','accepted','delivered','failed','delivery_unknown']);
 const number=value=>Number.isSafeInteger(value)&&value>=0?value:0;
 
-export function createPhoneRuntime({enabled=false,store,ledger,client,modelClient,scope,replyApproval,maxModelRequests=3,mode='fixture',pollIntervalMs=3000,listenPollLimit=10,timers={setTimeout,clearTimeout}}={}){
+export function createPhoneRuntime({enabled=false,store,ledger,client,modelClient,scope,replyApproval,maxModelRequests=3,mode='fixture',extractorSource='nvidia_nemotron',pollIntervalMs=3000,listenPollLimit=10,timers={setTimeout,clearTimeout}}={}){
   if(typeof enabled!=='boolean'||!['fixture','live-test'].includes(mode)||!Number.isInteger(maxModelRequests)||maxModelRequests<1||maxModelRequests>3||!Number.isInteger(pollIntervalMs)||pollIntervalMs<250||pollIntervalMs>10000||!Number.isInteger(listenPollLimit)||listenPollLimit<1||listenPollLimit>10||typeof timers?.setTimeout!=='function'||typeof timers?.clearTimeout!=='function')throw new PhoneRuntimeError('configuration');
+  if(!['nvidia_nemotron','local_demo_rules'].includes(extractorSource))throw new PhoneRuntimeError('configuration');
   let privateScope,permit;
   try{privateScope=structuredClone(scope);permit=structuredClone(replyApproval);}catch{throw new PhoneRuntimeError('configuration');}
   let inbox,jobs,replies,listening=false,listenGeneration=0,pollTimer=null,expiryTimer=null,listenerController=null,polling=false,lastError=null,lastStopReason=null,disposed=false,closing=null;
@@ -43,7 +44,7 @@ export function createPhoneRuntime({enabled=false,store,ledger,client,modelClien
     try{const current=bindPhotonIdentity(snapshot,matches[0]);return current.id===matches[0].id&&current.caseFingerprint===matches[0].caseFingerprint;}catch{return false;}
   }
   function status(){
-    const config=configured(),base={enabled:enabled&&!disposed,mode,source:mode==='fixture'?'injected-fixture':'configured-provider-clients',phoneConfigured:config.phone,modelConfigured:config.model,listening, sendingEnabled:false,endsAt:typeof privateScope?.to==='string'?privateScope.to:null,modelUsed:0,modelLimit:maxModelRequests,replyText:typeof permit?.text==='string'&&permit.text.length<=1000?permit.text:null,eligibleReportIds:[],replyStates:[],counts:{captured:0,quarantined:0,queued:0,proposals:0,failed:0,pollsUsed:0,pollLimit:number(privateScope?.maxPolls)},lastError,lastStopReason};
+    const config=configured(),base={enabled:enabled&&!disposed,mode,source:mode==='fixture'?'injected-fixture':'configured-provider-clients',extractorSource,phoneConfigured:config.phone,modelConfigured:config.model,listening, sendingEnabled:false,endsAt:typeof privateScope?.to==='string'?privateScope.to:null,modelUsed:0,modelLimit:maxModelRequests,replyText:typeof permit?.text==='string'&&permit.text.length<=1000?permit.text:null,eligibleReportIds:[],replyStates:[],counts:{captured:0,quarantined:0,queued:0,proposals:0,failed:0,pollsUsed:0,pollLimit:number(privateScope?.maxPolls)},lastError,lastStopReason};
     if(!enabled||!config.scopeId||typeof ledger?.read!=='function'||typeof store?.read!=='function')return base;
     try{
       const privateState=ledger.read(),snapshot=store.read(),current=Object.values(privateState.receipts).filter(receipt=>receipt.scopeId===config.scopeId),present=new Set(snapshot.reports.map(report=>report.id));
@@ -68,7 +69,7 @@ export function createPhoneRuntime({enabled=false,store,ledger,client,modelClien
   }
   function components(){
     if(!inbox)inbox=createPhotonInbox({enabled:true,store,ledger,client,scope:privateScope,messageAdapter:raw=>adaptPhotonMessage(raw,{providerTimestamp:raw.timestamps?.receivedAt})});
-    if(!jobs&&configured().model)jobs=createNemotronJobs({enabled:true,store,ledger,modelClient,scope:privateScope,maxRequests:maxModelRequests});
+    if(!jobs&&configured().model)jobs=createNemotronJobs({enabled:true,store,ledger,modelClient,scope:privateScope,maxRequests:maxModelRequests,extractorSource});
     if(!replies)replies=createPhotonReplies({enabled:true,store,ledger,client,scope:privateScope,approval:permit});
   }
   function stop(reason='manual'){

@@ -76,19 +76,23 @@ GET `/api/state` and successful family mutation responses include `X-Beacon-Sess
 
 ## Phone controls and proposal review
 
-The normal server exposes an offline status and returns 409 for phone actions. The optional launcher injects a runtime. All mutations below require a same-origin POST with a JSON object. Successful actions return the projected exercise state and revision headers. Phone actions also return `phone` status and a redacted `phoneAction` result. [Operator guide](PHONE_DEMO.md)
+The normal server exposes an offline status and returns 409 for phone actions. `npm run demo` injects the isolated rehearsal runtime. The optional `demo:phone` launcher injects the explicitly configured provider runtime. All mutations below require a same-origin POST with a JSON object. Successful actions return the projected exercise state and revision headers. Phone actions also return `phone` status and a redacted `phoneAction` result. [Operator guide](PHONE_DEMO.md)
 
 | Route | Request and effect |
 | --- | --- |
-| GET `/api/phone/status` | Returns `mode` (offline, fixture or live-test), configuration flags, listening and sending eligibility, window end, model usage and limit, exact approved reply text, eligible local report IDs and redacted reply states. Runtime counters include captured, quarantined, queued, proposed and failed reports and poll usage. Configuration does not establish delivery. |
+| GET `/api/phone/status` | Returns `mode` (offline, rehearsal, fixture or live-test), configuration flags, listening and sending eligibility, window end, model usage and limit, exact approved reply text, eligible local report IDs and redacted reply states. Runtime counters include captured, quarantined, queued, proposed and failed reports and poll usage. Configuration does not establish delivery. |
+| POST `/api/phone/simulate` | Rehearsal only. Send `text` and an optional `scenario` (`message`, `correction`, `stop` or `duplicate`). Duplicate reuses the prior input and message ID. STOP requires the command text. A new eligible message is captured before local interpretation. |
 | POST `/api/phone/listen` | `{}` starts bounded polling within the approved time window. Up to 10 polls per Listen and up to 20 per scope. |
 | POST `/api/phone/stop` | `{}` stops the listener. The sender’s STOP command separately revokes outreach consent. |
 | POST `/api/phone/poll` | `{}` checks inbound messages once. New eligible queued reports can consume a hosted model request after capture. |
 | POST `/api/reports/:reportId/interpret` | `{}` requests interpretation for an eligible queued report, within the three-request model cap. |
 | POST `/api/reports/:reportId/review` | Send `action` (`accept` or `dismiss`), `reviewerName`, `note` and `expectedProposalToken`. For acceptance, `observationIndices` selects a subset. Omitting it accepts all supported observations. The current source and token must match. An identical repeated decision is idempotent. |
+| POST `/api/reports/:reportId/assistance` | Send `observationId`, `reviewerName` and `note`. The selected canonical, accepted, reported water need on a linked case creates one unassigned task. Returns `taskId`, `status`, `caseId`, `reportId`, `observationId` and `duplicate`. Repeating the action returns the existing task, including a matching legacy task. |
 | POST `/api/reports/:reportId/reply/prepare` | `{}` approves the configured fixed wording against the captured parent. The server persists a reply key before any dispatch. |
 | POST `/api/reports/:reportId/reply/send` | `{}` sends an approved reply. After an ambiguous attempt, `{"manualRetry":true}` explicitly retries the same key within the two-attempt cap. An accepted send has `delivered:false`. A known failure is terminal. |
 | POST `/api/reports/:reportId/reply/delivery` | `{}` checks a previously accepted message with its recorded provider ID and channel. The journal permits up to four delivery checks. |
+
+The rehearsal uses `extractorSource: "local_demo_rules"` and a simulated phone. It does not make provider requests. Its listen/poll controls cannot read a real inbox. Prepare, send and delivery report simulated outcomes. POST `/api/reset` with `{}` resets both the isolated rehearsal exercise and its transport journal. The normal saved exercise and live provider ledger are separate. The three-request hosted cap applies to the live phone launcher. Rehearsal has a separate local interpretation counter.
 
 Incoming reports keep raw source text and may have no observation time. `modelReview` exposes status, validated proposal, token and decision as applicable. `observations` remains empty until the reviewer accepts selected facts as reported evidence. Dismissal retains the original. Commands bypass model inference. Exact STOP revokes consent and CHECKIN goes to enrollment review. Neither review nor provider delivery changes welfare, assistance or outreach.
 
@@ -111,3 +115,8 @@ Casework’s page-only draft store keys verification and message values by case 
 Background rebuilds restore stable action/case-card focus and same-case field selection. A removed verification action falls back to its case heading. The shared state client still owns transport ordering; a successfully rendered SSE snapshot suppresses a later initial-GET error panel, and stream-constructor failure does not abort HTTP/control initialization. There is no new polling loop.
 
 Explicit fixture fitting considers actual detail-card geometry rather than treating every compact layout as a bottom sheet. Resizing reapplies that explicit fit until manual navigation cancels it; arbitrary free-pan views retain their center. The fit helper and short-portrait CSS change no source coordinates, request counts, imagery dates or backend contracts.
+
+
+## Historical water-signal change overlay
+
+GET `/data/houston-water-change.json` returns a fixed EPSG:4326 comparison grid and provenance. Each 64 × 64 display-pixel cell summarizes only jointly observed pixels on the registered input grids. Comparisons use August 15, 2017 as the baseline and August 30 or September 1 as the after date. Cell score is 100 times the sum of positive MNDWI changes divided by all paired pixels, including the zero contribution from non-increases. The amber display caps at 100+. Partial coverage remains explicit; cells without paired samples are unknown. The geographic grid and source hashes are independent of the red assistance counts and local xBD classifier. There is no write endpoint for the overlay.

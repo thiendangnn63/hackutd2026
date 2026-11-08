@@ -2,25 +2,28 @@
 
 A working **local, fictional disaster-response demo** for the grandparents inquiry story. A family member opens a contact concern, the app selects eligible community participants, a simulated SMS sighting becomes unverified evidence, and a demo officer records a verified outcome while any assistance request stays open.
 
-**This is not an emergency service. Do not enter real personal, patient, or emergency information.** The ordinary launcher keeps all family messaging and text extraction local. An optional, explicitly configured phone test can use Photon iMessage and hosted NVIDIA Nemotron with synthetic data.
+**This is not an emergency service. Do not enter real personal, patient, or emergency information.** The normal launcher keeps family messaging and text extraction local. An optional, explicitly configured phone test can use Photon iMessage and hosted NVIDIA Nemotron with synthetic data.
 
-## Run
+## Quick start
 
-The core app requires Node.js **22 or later** and has no JavaScript dependencies. Optional local satellite inference uses the Python dependencies listed below.
+Use Node.js 22 or later. The rehearsal has no JavaScript dependencies and needs no `.env`, phone number, NVIDIA account, hosted model or GPU.
 
 ```sh
-cp .env.example .env
-npm start
+npm run demo
 ```
 
-Open **http://127.0.0.1:4173**. Use `npm run dev` for server restart on edits. Set `PORT` in `.env` if 4173 is busy. The server binds only to loopback; another device cannot connect.
+Open [Beacon on loopback](http://127.0.0.1:4173/#mayor). The rehearsal uses a fictional phone, a local rules-based interpreter and its own saved exercise under `.data/rehearsal/`. Its **Reset exercise** control resets that rehearsal. [Three-to-five-minute presenter walkthrough](docs/DEMO.md)
+
+`npm start` runs the original local family exercise using its existing `.data/state.json`. Stop the server before switching launchers, or run `npm run demo -- --port 4178` to rehearse alongside it on a separate port. Both bind only to loopback. Optional satellite inference uses the Python dependencies listed below.
 
 ```sh
 npm run check
 npm test
 ```
 
-`check` validates JavaScript syntax and package JSON. `test` runs domain, persistence, and HTTP integration checks. No API keys or internet access are required for any check.
+These checks run without provider credentials or internet access.
+
+**The rehearsal map.** Red measures fictional open assistance requests on a fixed 0–300 scale. Blue/cyan imagery shows historical flood context. The amber **Before / after change** overlay compares the August 15 Sentinel-2 water index with August 30 or September 1 over jointly observed pixels. Its fixed 0–100+ scale measures increased water signal. Missing coverage stays unknown. Building damage is evaluated separately on known historical xBD crops. [Presenter walkthrough](docs/DEMO.md#reading-the-impact-layers)
 
 ## Optional iPhone and Nemotron demo
 
@@ -108,7 +111,7 @@ Do not expose this server publicly. Demo role selection is not authorization. Pr
 
 The satellite panel is separate from the fictional family exercise. It uses historical Hurricane Harvey 2017 pre/post satellite pairs with known building boxes. It does not accept resident ground photos or affect welfare/assistance states. Missing bundles produce an honest unavailable state.
 
-The first trained bundle has been verified locally, including actual checkpoint inference and browser operation. See [the model card](docs/MODEL_CARD.md) for provenance, held-out scores, weak-class limitations, and verification details. The bundle is not stored in Git.
+The first trained bundle has been verified locally, including actual checkpoint inference and browser operation. See [the model card](docs/MODEL_CARD.md) for provenance, held-out scores, weak-class limitations, and verification details. The original ZIP is packaged separately from the source tree. [Download the optional model release asset](https://github.com/thiendangnn63/hackutd2026/releases/download/beacon-demo-2026-11-08/utd_xbd_model.zip).
 
 `training/` contains the from-scratch EfficientNet-B0 pipeline and self-contained Kaggle notebook. The notebook is intended for a private Kaggle run within existing free quota. Local inference is optional and uses CPU only. To prepare it with an existing Python 3.12 installation:
 
@@ -119,10 +122,10 @@ npm run test:training
 npm run test:model-import
 ```
 
-Import only a trusted project-produced bundle, using its separately verified SHA-256:
+Download the project-produced ZIP from the release link above. Import it with the SHA-256 also recorded in the model card:
 
 ```sh
-npm run import:model -- /absolute/path/utd_xbd_model.zip --sha256 VERIFIED_BUNDLE_SHA256
+npm run import:model -- /path/to/utd_xbd_model.zip --sha256 93a62ca7e895e29d51733a57bbe777837bfa27dfbea50d6b0e1b7248228dc1e4
 ```
 
 The importer checks archive paths, per-file checksums, completed training, model contract, held-out predictions, probabilities, and crop bounds. It stores weights/images under git-ignored `.data/models/`, without changing the family exercise. The app never executes Python code from the archive. The importer loads the checkpoint through the repository's reviewed inference code with `torch.load(weights_only=True)` and compares a real local prediction with cached held-out output. Live inference remains disabled if this verification fails. The browser can run another local inference on a selected bundled crop, with a one-job limit and timeout.

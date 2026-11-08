@@ -13,10 +13,14 @@ export function createProposalView(report,{query='',onReview}={}){
   const review=report.modelReview;if(!review)return null;
   const view=node('section','proposal-review');view.dataset.proposalStatus=review.status;
   view.append(node('p','proposal-state',proposalStatus(report)));
+  const source=review.extractorSource==='local_demo_rules'?'Local demo rules · no NVIDIA request was made.':review.extractorSource==='nvidia_nemotron'?'NVIDIA Nemotron · suggestions require human review.':'Interpretation source not recorded.';
+  view.append(node('p','workspace-note proposal-source',source));
   const copy=review.status==='command_processed'?'The sender’s outreach consent is off. This command is not a welfare observation.':review.status==='command_review'?'Enrollment still needs confirmation. This request neither enrolls the sender nor confirms welfare.':review.status==='accepted'?'A reviewer accepted these observations as reported evidence. Welfare still requires direct confirmation.':review.status==='dismissed'?'The suggestions were dismissed. The original message remains available for review.':review.status==='failed'||review.status==='stale'?'The raw message remains available for human review. No suggested observations have been applied.':'Raw message saved. Suggestions remain separate from case evidence and decisions.';
   view.append(node('p','workspace-note',copy));
   if(review.reviewDecision){const decision=review.reviewDecision;view.append(node('p','workspace-note',`${decision.reviewerName} · ${decision.note}`));}
   if(review.status==='proposal_ready'&&review.proposal){
+    const flags=(review.proposal.reviewFlags||[]).filter(flag=>flag!=='model_output_needs_review');
+    if(flags.length)view.append(node('p','review-flag','Suggested review flags: '+flags.map(title).join(' · ')));
     const observations=Array.isArray(review.proposal.observations)?review.proposal.observations:[];
     const details=node('details','proposal-details'),summary=node('summary','',`Suggested observations (${count(observations.length)})`);
     summary.dataset.recordFocus='proposal:'+report.id;details.dataset.proposalReport=report.id;details.append(summary);details.open=openReports.has(report.id);

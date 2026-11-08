@@ -10,8 +10,8 @@ export class NemotronJobError extends Error{
   constructor(code){super(code==='disabled'?'Text interpretation is disabled.':code==='budget_exhausted'?'The approved model test limit has been reached.':'This report is not available for the approved model test.');this.name='NemotronJobError';this.code=code;this.status=code==='disabled'?409:400;}
 }
 const fail=code=>{throw new NemotronJobError(code);};
-export function createNemotronJobs({enabled=false,store,ledger,modelClient,scope,maxRequests=3,timeoutMs=15000}={}){
-  if(typeof enabled!=='boolean')fail('invalid_configuration');
+export function createNemotronJobs({enabled=false,store,ledger,modelClient,scope,maxRequests=3,timeoutMs=15000,extractorSource='nvidia_nemotron'}={}){
+  if(typeof enabled!=='boolean'||!['nvidia_nemotron','local_demo_rules'].includes(extractorSource))fail('invalid_configuration');
   let running=false;
   function authorized(reportId){
     if(typeof store?.read!=='function'||typeof store?.act!=='function'||typeof ledger?.read!=='function'||typeof ledger?.act!=='function'||typeof modelClient?.extract!=='function'||!Number.isInteger(maxRequests)||maxRequests<1||maxRequests>3||!Number.isInteger(timeoutMs)||timeoutMs<50||timeoutMs>30000)fail('invalid_configuration');
@@ -30,7 +30,7 @@ export function createNemotronJobs({enabled=false,store,ledger,modelClient,scope
     if(!identity.approvedTextHashes.includes(textHash(report.text))||['STOP','CHECKIN'].includes(report.text.trim().toUpperCase()))fail('unapproved_report');
     if(!state.participants.some(item=>item.id===binding.fixtureAlias&&item.source==='fixture'&&item.optedIn===true))fail('consent_revoked');
     if(fixtureCaseFingerprint(state,binding.caseId)!==binding.caseFingerprint)fail('case_changed');
-    const fingerprint=hash({receiptKey:receipt.key,mappingFingerprint:binding.mappingFingerprint,textHash:textHash(report.text),caseFingerprint:binding.caseFingerprint});
+    const fingerprint=hash({receiptKey:receipt.key,mappingFingerprint:binding.mappingFingerprint,textHash:textHash(report.text),caseFingerprint:binding.caseFingerprint,extractorSource});
     return {scopeId,receiptKey:receipt.key,report,fingerprint};
   }
   return Object.freeze({
@@ -48,13 +48,13 @@ export function createNemotronJobs({enabled=false,store,ledger,modelClient,scope
         if((budget.modelMaxRequests!==undefined&&budget.modelMaxRequests!==maxRequests)||!Number.isInteger(budget.modelRequests??0)||(budget.modelRequests??0)<0)return {reserved:false,reason:'budget_changed'};
         if((budget.modelRequests??0)>=maxRequests)return {reserved:false,reason:'budget_exhausted'};
         next.budgets[allowed.scopeId]={...budget,modelMaxRequests:maxRequests,modelRequests:(budget.modelRequests??0)+1};
-        next.modelJobs[reportId]={reportId,scopeId:allowed.scopeId,receiptKey:allowed.receiptKey,fingerprint:allowed.fingerprint,status:'reserved',reservedAt:stamp(),completedAt:null,result:null};
+        next.modelJobs[reportId]={reportId,scopeId:allowed.scopeId,receiptKey:allowed.receiptKey,fingerprint:allowed.fingerprint,extractorSource,status:'reserved',reservedAt:stamp(),completedAt:null,result:null};
         return {reserved:true};
       });
       if(!reservation.reserved)return {ran:false,reason:reservation.reason,reportId};
       running=true;
       try{
-        const result=await runReportJob(store,{enabled:true,reportId,timeoutMs,signal,extractor:async(input,options)=>{
+        const result=await runReportJob(store,{enabled:true,reportId,timeoutMs,signal,extractorSource,extractor:async(input,options)=>{
           // STOP or a changed mapping may arrive between reservation/claim and
           // invocation. Check immediately before the provider request.
           const current=authorized(reportId);

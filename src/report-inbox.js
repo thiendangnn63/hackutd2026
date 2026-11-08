@@ -5,6 +5,8 @@ import { isDeepStrictEqual } from 'node:util';
 import { validateExtraction } from './nemotron-client.js';
 
 const VERSION = 1;
+const EXTRACTOR_SOURCES = new Set(['nvidia_nemotron', 'local_demo_rules']);
+const proposalPath = source => source === 'local_demo_rules' ? 'local_demo_rules' : 'nemotron';
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -93,7 +95,8 @@ export function captureRawReport(state, input = {}) {
 
 // Synchronous action. A persisted lease makes abandoned work reclaimable after
 // restart; only the new opaque token may complete a reclaimed job.
-export function claimReportJob(state, { reportId, leaseMs = 30000 } = {}) {
+export function claimReportJob(state, { reportId, leaseMs = 30000, extractorSource = 'nvidia_nemotron' } = {}) {
+  requireValue(EXTRACTOR_SOURCES.has(extractorSource), 'invalid_configuration', 'Choose an explicitly supported extractor source.');
   requireValue(Number.isInteger(leaseMs) && leaseMs >= 50 && leaseMs <= 120000, 'invalid_lease', 'Use a bounded job lease.');
   requireValue(reportId === undefined || typeof reportId === 'string' && reportId.trim(), 'invalid_report', 'Choose a report ID or omit it.');
   const now = Date.now();
@@ -102,28 +105,35 @@ export function claimReportJob(state, { reportId, leaseMs = 30000 } = {}) {
   if (!report || !claimable(report)) return { claimed: false, reportId: report?.id, status: report ? report.modelReview.status : null, reason: report ? report.modelReview.status : 'empty' };
   if (!currentSourceMatches(state, report)) return { claimed: false, ...markStale(state, report) };
   const claimToken = randomUUID(), sourceHash = report.modelReview.sourceHash;
-  Object.assign(report.modelReview, { status: 'running', attempts: report.modelReview.attempts + 1, proposal: null, proposalToken: null, reviewDecision: null, errorCode: null, updatedAt: new Date(now).toISOString(), claim: { token: claimToken, sourceHash, claimedAt: new Date(now).toISOString(), expiresAt: new Date(now + leaseMs).toISOString() } });
+  Object.assign(report.modelReview, { status: 'running', attempts: report.modelReview.attempts + 1, proposal: null, proposalToken: null, reviewDecision: null, errorCode: null, updatedAt: new Date(now).toISOString(), extractorSource, claim: { token: claimToken, sourceHash, extractorSource, claimedAt: new Date(now).toISOString(), expiresAt: new Date(now + leaseMs).toISOString() } });
   audit(state, 'inbox.job_claimed', report.id);
-  return { claimed: true, reportId: report.id, claimToken, sourceHash, attempt: report.modelReview.attempts, input: { dataClass: 'synthetic', text: report.modelReview.source.text, subjectNames: structuredClone(report.modelReview.source.subjectNames) } };
+  return { claimed: true, reportId: report.id, claimToken, sourceHash, extractorSource, attempt: report.modelReview.attempts, input: { dataClass: 'synthetic', text: report.modelReview.source.text, subjectNames: structuredClone(report.modelReview.source.subjectNames) } };
 }
 function matchingClaim(state, input) {
   const report = getReport(state, input.reportId), review = report.modelReview;
   const expiry = Date.parse(review.claim?.expiresAt);
+  // The trusted caller chooses provenance before invocation. Extractor output
+  // cannot relabel a local rule result as a remote model response (or vice versa).
+  const source = input.extractorSource ?? 'nvidia_nemotron';
+  if (!EXTRACTOR_SOURCES.has(source) || (review.extractorSource ?? 'nvidia_nemotron') !== source || (review.claim?.extractorSource ?? 'nvidia_nemotron') !== source) return { rejected: { reportId: report.id, status: review.status, completed: false, reason: 'stale_claim' } };
   if (review.status !== 'running' || typeof input.claimToken !== 'string' || review.claim?.token !== input.claimToken || review.claim.sourceHash !== input.sourceHash || review.sourceHash !== input.sourceHash || !Number.isFinite(expiry) || expiry <= Date.now()) return { rejected: { reportId: report.id, status: review.status, completed: false, reason: 'stale_claim' } };
   if (!currentSourceMatches(state, report)) return { rejected: markStale(state, report) };
   return { report };
 }
 function validatedProposal(value, report) {
-  // createNemotronClient.extract returns this exact canonical envelope. It is
-  // revalidated against the persisted source, stripping only its injected flag.
+  // Both extractors return a review envelope. Revalidate the persisted source
+  // and require the path chosen by the trusted claim, never by returned output.
+  requireValue(report.modelReview.extractorSource === undefined || EXTRACTOR_SOURCES.has(report.modelReview.extractorSource), 'invalid_output', 'The proposal source is invalid.');
+  const path = proposalPath(report.modelReview.extractorSource);
   if (object(value) && (own(value, 'requiresReview') || own(value, 'processingPath'))) {
-    requireValue(Object.keys(value).every(key => ['observations', 'reviewFlags', 'requiresReview', 'processingPath'].includes(key)) && value.requiresReview === true && value.processingPath === 'nemotron' && Array.isArray(value.reviewFlags) && value.reviewFlags.length <= 13 && value.reviewFlags.includes('model_output_needs_review'), 'invalid_output', 'The proposal envelope is invalid.');
+    requireValue(Object.keys(value).every(key => ['observations', 'reviewFlags', 'requiresReview', 'processingPath'].includes(key)) && value.requiresReview === true && value.processingPath === path && Array.isArray(value.reviewFlags) && value.reviewFlags.length <= 13 && value.reviewFlags.includes('model_output_needs_review'), 'invalid_output', 'The proposal envelope is invalid.');
     value = { observations: value.observations, reviewFlags: value.reviewFlags.filter(flag => flag !== 'model_output_needs_review') };
   }
-  return validateExtraction(value, report.modelReview.source.text, { subjectNames: report.modelReview.source.subjectNames });
+  return { ...validateExtraction(value, report.modelReview.source.text, { subjectNames: report.modelReview.source.subjectNames }), processingPath: path };
 }
 function proposalFingerprint(report, proposal) {
-  return hash({ version: VERSION, reportId: report.id, sourceHash: report.modelReview.sourceHash, proposal });
+  // Reports created before explicit provenance retain their existing review token.
+  return hash({ version: VERSION, reportId: report.id, sourceHash: report.modelReview.sourceHash, ...(report.modelReview.extractorSource !== undefined ? { extractorSource: report.modelReview.extractorSource } : {}), proposal });
 }
 export function completeReportJob(state, input = {}) {
   const { report, rejected } = matchingClaim(state, input);
@@ -159,6 +169,18 @@ function selectedIndices(input, count) {
     'invalid_selection', 'Select supported observation indices from the displayed proposal.');
   return [...new Set(input)].sort((a, b) => a - b);
 }
+function currentProposal(state, report, expectedToken) {
+  const review = report.modelReview;
+  requireValue(currentSourceMatches(state, report), 'source_changed', 'The report or linked case changed. Refresh before reviewing.', 409);
+  let proposal;
+  try { proposal = validatedProposal(review.proposal, report); }
+  catch { throw new InboxError('invalid_proposal', 'This proposal is no longer valid. Refresh before reviewing.', 409); }
+  requireValue(isDeepStrictEqual(proposal, review.proposal), 'invalid_proposal', 'The displayed proposal is no longer canonical. Refresh before reviewing.', 409);
+  const proposalToken = proposalFingerprint(report, proposal);
+  requireValue(review.proposalToken === proposalToken && expectedToken === proposalToken,
+    'stale_proposal', 'The displayed proposal changed. Refresh before reviewing.', 409);
+  return proposal;
+}
 function reviewProposal(state, input, action) {
   const allowed = ['reportId', 'reviewerName', 'note', 'expectedProposalToken', ...(action === 'accepted' ? ['observationIndices'] : [])];
   requireValue(object(input) && Object.keys(input).every(key => allowed.includes(key)), 'invalid_review', 'Use only the displayed report review fields.');
@@ -170,14 +192,8 @@ function reviewProposal(state, input, action) {
   const report = getReport(state, reportId), review = report.modelReview;
   requireValue(['proposal_ready', 'accepted', 'dismissed'].includes(review.status) && object(review.proposal),
     'review_unavailable', 'This report has no completed proposal available for review.', 409);
-  requireValue(currentSourceMatches(state, report), 'source_changed', 'The report or linked case changed. Refresh before reviewing.', 409);
-  let proposal;
-  try { proposal = validatedProposal(review.proposal, report); }
-  catch { throw new InboxError('invalid_proposal', 'This proposal is no longer valid. Refresh before reviewing.', 409); }
-  requireValue(isDeepStrictEqual(proposal, review.proposal), 'invalid_proposal', 'The displayed proposal is no longer canonical. Refresh before reviewing.', 409);
-  const proposalToken = proposalFingerprint(report, proposal);
-  requireValue(review.proposalToken === proposalToken && input.expectedProposalToken === proposalToken,
-    'stale_proposal', 'The displayed proposal changed. Refresh before reviewing.', 409);
+  const proposal = currentProposal(state, report, input.expectedProposalToken);
+  const proposalToken = review.proposalToken;
   if (action === 'accepted' && report.caseId !== null) {
     const references = [...new Set(report.text.toUpperCase().match(/\bC\d+\b/g) || [])];
     requireValue(references.every(reference => reference === report.caseId), 'case_reference_conflict',
@@ -214,15 +230,55 @@ function reviewProposal(state, input, action) {
 export function acceptReportProposal(state, input = {}) { return reviewProposal(state, input, 'accepted'); }
 export function dismissReportProposal(state, input = {}) { return reviewProposal(state, input, 'dismissed'); }
 
+// Only a separate officer action turns an accepted, source-linked water need
+// into an assistance task. The case can already be resolved for welfare.
+export function trackReportedAssistance(state, input = {}) {
+  const allowed = ['reportId', 'observationId', 'reviewerName', 'note'];
+  requireValue(object(input) && Object.keys(input).every(key => allowed.includes(key)),
+    'invalid_review', 'Use only the displayed assistance tracking fields.');
+  const reportId = reviewText(input.reportId, 'report ID', 160);
+  const observationId = reviewText(input.observationId, 'observation ID', 160);
+  const reviewerName = reviewText(input.reviewerName, 'reviewer name', 120);
+  const note = reviewText(input.note, 'tracking note', 1500);
+  const report = getReport(state, reportId), review = report.modelReview, decision = review.reviewDecision;
+  requireValue(review.status === 'accepted' && decision?.action === 'accepted',
+    'review_unavailable', 'Accept the reported water need before tracking assistance.', 409);
+  const proposal = currentProposal(state, report, decision.proposalToken);
+  const item = state.cases.find(item => item.id === report.caseId);
+  requireValue(item && item.reportIds?.includes(reportId), 'invalid_case', 'A linked case is required.', 409);
+  const indices = decision.observationIndices;
+  requireValue(Array.isArray(indices) && isDeepStrictEqual(indices, selectedIndices(indices, proposal.observations.length)) &&
+    Array.isArray(report.observations) && report.observations.length === indices.length,
+    'invalid_selection', 'The accepted observation selection has changed.', 409);
+  const matches = report.observations.filter(observation => observation.id === observationId);
+  requireValue(matches.length === 1, 'invalid_selection', 'Select an accepted water need.');
+  const observation = matches[0], position = report.observations.indexOf(observation);
+  const expected = proposal.observations[indices[position]];
+  requireValue(observation.type === 'water_need' && observation.verification === 'reported' &&
+    isDeepStrictEqual(observation, {id: observationId, ...expected, verification: 'reported'}),
+    'invalid_selection', 'Only a canonical accepted water need can be tracked.', 409);
+  const existing = state.assistance.find(task => task.reportId === reportId && task.caseId === item.id &&
+    task.type === 'water_need' && (task.observationId === observationId ||
+      (task.observationId == null && task.summary === observation.summary)));
+  const result = {reportId, caseId: item.id, observationId};
+  if (existing) return {...result, taskId: existing.id, status: existing.status, duplicate: true};
+
+  const task = {id: `T-${randomUUID()}`, caseId: item.id, reportId, observationId, type: 'water_need',
+    summary: observation.summary, status: 'unassigned', reviewerName, note, createdAt: stamp()};
+  state.assistance.push(task);
+  audit(state, 'assistance.tracked', reportId, `${reviewerName} tracked ${observationId} as task ${task.id}.`);
+  return {...result, taskId: task.id, status: task.status, duplicate: false};
+}
+
 // The caller still owns consent/case/budget authorization. This function has no
 // configured/default client and cannot perform work unless explicitly enabled.
 // Capture must be called separately first. Every await occurs outside Store.act.
-export async function runReportJob(store, { enabled = false, extractor, reportId, timeoutMs = 15000, signal } = {}) {
+export async function runReportJob(store, { enabled = false, extractor, extractorSource = 'nvidia_nemotron', reportId, timeoutMs = 15000, signal } = {}) {
   requireValue(typeof enabled === 'boolean', 'invalid_configuration', 'Enable job processing explicitly.');
   if (!enabled) return { ran: false, reason: 'disabled' };
-  requireValue(typeof store?.act === 'function' && typeof extractor === 'function' && Number.isInteger(timeoutMs) && timeoutMs >= 50 && timeoutMs <= 30000 && (signal === undefined || signal instanceof AbortSignal), 'invalid_configuration', 'Use an injected extractor and bounded timeout.');
+  requireValue(typeof store?.act === 'function' && typeof extractor === 'function' && EXTRACTOR_SOURCES.has(extractorSource) && Number.isInteger(timeoutMs) && timeoutMs >= 50 && timeoutMs <= 30000 && (signal === undefined || signal instanceof AbortSignal), 'invalid_configuration', 'Use an injected extractor and bounded timeout.');
   if (signal?.aborted) return { ran: false, reason: 'cancelled' };
-  const claim = store.act(claimReportJob, { reportId, leaseMs: timeoutMs + 1000 });
+  const claim = store.act(claimReportJob, { reportId, leaseMs: timeoutMs + 1000, extractorSource });
   if (!claim.claimed) return { ran: false, status: claim.status, reason: claim.reason, reportId: claim.reportId };
   const controller = new AbortController(); let timer, abort;
   const stopped = new Promise((resolve, reject) => {

@@ -8,7 +8,7 @@ import { SatelliteService } from './satellite.js';
 import { HoustonService } from './houston-service.js';
 import {historicalImagery,historicalImageFile} from './historical-imagery.js';
 import { publicState } from './public-state.js';
-import { InboxError, acceptReportProposal, dismissReportProposal } from './report-inbox.js';
+import { InboxError, acceptReportProposal, dismissReportProposal, trackReportedAssistance } from './report-inbox.js';
 import { PhoneRuntimeError } from './phone-runtime.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,6 +23,9 @@ const files = {
   '/labels-model.js': ['labels-model.js', 'text/javascript'],
   '/reference-layer.js': ['reference-layer.js', 'text/javascript'],
   '/historical-layer.js': ['historical-layer.js', 'text/javascript'],
+  '/impact-model.js': ['impact-model.js', 'text/javascript'],
+  '/impact-layer.js': ['impact-layer.js', 'text/javascript'],
+  '/data/houston-water-change.json': ['data/houston-water-change.json', 'application/json'],
   '/map-coverage.js': ['map-coverage.js', 'text/javascript'],
   '/observation-view.js': ['observation-view.js', 'text/javascript'],
   '/data/houston-observation-coverage.json': ['data/houston-observation-coverage.json', 'application/json'],
@@ -135,7 +138,7 @@ export function createApp(store = new Store(resolve(root, '.data/state.json')), 
         openStateStream(res, store); return;
       }
       const phoneStatus = () => phone ? phone.status() : {enabled:false,phoneConfigured:false,modelConfigured:false,listening:false,sendingEnabled:false,mode:'offline',endsAt:null,modelUsed:0,modelLimit:3,replyText:null,eligibleReportIds:[],replyStates:[]};
-      if (req.method === 'GET' && url.pathname === '/api/health') return json(200, { ok: true, mode: 'simulation', liveSendingEnabled: Boolean(phoneStatus().sendingEnabled) });
+      if (req.method === 'GET' && url.pathname === '/api/health') {const status=phoneStatus();return json(200, { ok: true, mode: 'simulation', liveSendingEnabled: status.mode==='live-test'&&Boolean(status.sendingEnabled) });}
       if (req.method === 'GET' && url.pathname === '/api/phone/status') {
         if(url.search)throw new InputError('Unsupported phone status option.');
         return json(200,phoneStatus());
@@ -168,6 +171,12 @@ export function createApp(store = new Store(resolve(root, '.data/state.json')), 
       if (req.method === 'POST') {
         if (!req.headers.origin) throw new InputError('Same-origin requests are required for mutations.', 403);
         const input = await body(req);
+        if(url.pathname==='/api/phone/simulate'){
+          if(url.search||Object.keys(input).some(key=>!['text','scenario'].includes(key)))throw new InputError('Unsupported rehearsal action input.');
+          if(!phone||phoneStatus().mode!=='rehearsal'||typeof phone.simulate!=='function')throw new InputError('The local rehearsal is not configured.',409);
+          const result=await phone.simulate(input);
+          return stateJson(200,{...store.read(),phone:phoneStatus(),phoneAction:result});
+        }
         if (url.pathname === '/api/satellite/infer') return json(200, await satellite.infer(input));
         const phoneAction = url.pathname.match(/^\/api\/phone\/(listen|stop|poll)$/);
         const reportPhoneAction = url.pathname.match(/^\/api\/reports\/(R-[a-zA-Z0-9-]+)\/(interpret|reply\/(prepare|send|delivery))$/);
@@ -189,6 +198,11 @@ export function createApp(store = new Store(resolve(root, '.data/state.json')), 
         }
         if (url.pathname === '/api/cases') return stateJson(201, store.act(openCase, input));
         if (url.pathname === '/api/reports') return stateJson(200, store.act(receiveReport, input));
+        const assistance = url.pathname.match(/^\/api\/reports\/(R-[a-zA-Z0-9-]+)\/assistance$/);
+        if(assistance){
+          if(url.search||Object.keys(input).some(key=>!['observationId','reviewerName','note'].includes(key)))throw new InputError('Unsupported assistance tracking input.');
+          return stateJson(200,store.act(trackReportedAssistance,{...input,reportId:assistance[1]}));
+        }
         const review = url.pathname.match(/^\/api\/reports\/(R-[a-zA-Z0-9-]+)\/review$/);
         if (review) {
           if(url.search)throw new InputError('Unsupported proposal review option.');
@@ -196,7 +210,13 @@ export function createApp(store = new Store(resolve(root, '.data/state.json')), 
           const { action, ...decision } = input;
           return stateJson(200, store.act(action === 'accept' ? acceptReportProposal : dismissReportProposal, { ...decision, reportId: review[1] }));
         }
-        if (url.pathname === '/api/reset') return stateJson(200, store.reset());
+        if (url.pathname === '/api/reset') {
+          if(phoneStatus().mode==='rehearsal'&&typeof phone?.reset==='function'){
+            if(url.search||Object.keys(input).length)throw new InputError('Unsupported rehearsal reset input.');
+            await phone.reset();return stateJson(200,{...store.read(),phone:phoneStatus()});
+          }
+          return stateJson(200, store.reset());
+        }
         const caseAction = url.pathname.match(/^\/api\/cases\/(C\d+)\/(outreach|verify)$/);
         if (caseAction) return stateJson(200, store.act(caseAction[2] === 'outreach' ? sendOutreach : verifyCase, caseAction[1], input));
         const consent = url.pathname.match(/^\/api\/participants\/([a-z0-9-]+)\/consent$/);

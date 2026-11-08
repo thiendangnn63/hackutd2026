@@ -9,6 +9,7 @@ import {captureRawReport} from '../src/report-inbox.js';
 import {ProviderLedger} from '../src/provider-ledger.js';
 import {createPhotonInbox,bindPhotonIdentity,adaptPhotonMessage,photonScopeFingerprint} from '../src/photon-inbox.js';
 import {createNemotronJobs} from '../src/nemotron-jobs.js';
+import {createDemoExtractor} from '../src/demo-extractor.js';
 import {publicState} from '../src/public-state.js';
 
 const id=(kind,value)=>`pho_${kind}_${String(value).padStart(26,'0')}`;
@@ -261,4 +262,20 @@ test('private receipt envelopes and actual handles remain in the separate ledger
   assert.doesNotMatch(JSON.stringify(view),/"providerIdentity"|"claimToken"|"sourceHash"|"sourceSnapshot"/);
   assert.equal(view.reports[0].text,text);assert.equal(view.reports[0].modelReview.proposal.requiresReview,true);
   assert.equal(view.participants[0].phone,'+12125550100');assert.deepEqual(stored.outbox,[]);assert.deepEqual(stored.assistance,[]);
+});
+
+
+test('explicit local scripted jobs retain receipt, consent, dedupe and durable limits with honest source',async t=>{
+  const system=setup(t),reportId=await captured(system),before=domain(system.store.read());
+  const local=system.jobs({modelClient:createDemoExtractor(),extractorSource:'local_demo_rules'});
+  const result=await local.interpretOne(reportId);
+  assert.equal(result.status,'proposal_ready');assert.equal(system.calls.model,0);assert.equal(system.calls.reply,0);
+  const report=getReport(system.store,reportId),privateState=system.ledger.read();
+  assert.deepEqual(report.observations,[]);assert.deepEqual(domain(system.store.read()),before);
+  assert.equal(report.modelReview.extractorSource,'local_demo_rules');assert.equal(report.modelReview.proposal.processingPath,'local_demo_rules');
+  assert.equal(privateState.modelJobs[reportId].extractorSource,'local_demo_rules');
+  assert.equal(privateState.budgets[photonScopeFingerprint(system.scope)].modelRequests,1);
+  assert.equal((await local.interpretOne(reportId)).reason,'not_queued');
+  assert.equal(publicState(system.store.read()).reports[0].modelReview.extractorSource,'local_demo_rules');
+  for(const extractorSource of ['local','nemotron','remote',null])assert.throws(()=>system.jobs({extractorSource}),{code:'invalid_configuration'});
 });

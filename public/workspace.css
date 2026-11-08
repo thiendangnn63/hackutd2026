@@ -634,3 +634,20 @@ input[type=checkbox],input[type=range]{accent-color:var(--blue)}
 .phone-reply blockquote{margin:8px 0;white-space:pre-wrap}
 .phone-reply .phone-actions{margin-top:8px}
 .phone-panel [role=status]:empty{display:none}
+.phone-rehearsal{border-bottom:1px solid var(--line);padding-bottom:14px;display:grid;gap:10px}
+.phone-rehearsal[hidden]{display:none}
+.phone-inbound[hidden]{display:none}
+.phone-rehearsal h3{font-size:14px;letter-spacing:0;margin:0}
+.phone-rehearsal .workspace-note{margin:0;line-height:1.7}
+.phone-rehearsal textarea{width:100%;min-height:96px;resize:vertical}
+.impact-toggle{display:flex;align-items:center;gap:7px;min-height:32px;margin:7px 0 0;font-size:11px;cursor:pointer}
+.impact-toggle input{accent-color:#ffbd59;margin:0}.impact-toggle i,.impact-key i{width:8px;height:8px;border-radius:2px;background:#ffbd59;flex:none}
+.impact-status{font-size:9px;line-height:1.5;color:var(--muted);margin:2px 0 8px}
+.impact-settings{border-top:1px solid var(--line);margin-top:13px;padding-top:12px}.impact-settings h3{font-size:12px;margin:0 0 10px}.impact-settings .workspace-note{font-size:10px;line-height:1.65}
+.impact-legend{border-top:1px solid var(--line);margin-top:9px;padding-top:8px}.impact-legend[hidden]{display:none}.impact-key{display:flex;align-items:center;gap:6px;font-size:9px;color:#efc385}
+.impact-ramp{height:5px;border-radius:3px;margin-top:7px;background:linear-gradient(90deg,#ffbd5900 0%,#ffbd5980 25%,#ffbd59b4 50%,#ffbd59dd 75%,#ffbd59 100%)}
+.impact-legend small{display:block;font-size:8px;line-height:1.6;color:var(--muted)}
+
+/* Keep assistance demand distinct from the historical water layer. */
+.signal-layer-key{font-size:9px;color:var(--red);margin:0 0 8px}.signal-layer-key.blue{color:var(--blue)}
+.demand-link{color:var(--red);padding:0 0 10px;font-size:10px;line-height:1.5}

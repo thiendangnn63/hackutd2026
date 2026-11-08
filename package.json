@@ -16,6 +16,7 @@
     "test:model-import": ".venv/bin/python -m unittest discover -s test -p test_model_import.py -v",
     "test:geography": ".venv/bin/python -m unittest discover -s test -p test_houston_geometry.py -v",
     "import:model": ".venv/bin/python scripts/import_model.py",
-    "demo:phone": "node --env-file-if-exists=.env src/phone-server.js"
+    "demo:phone": "node --env-file-if-exists=.env src/phone-server.js",
+    "demo": "node src/rehearsal-server.js"
   }
 }
