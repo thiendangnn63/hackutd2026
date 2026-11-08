@@ -1,5 +1,5 @@
 import {node,button,svgNode,icon,iconButton,title,count} from './ui.js';
-import {geometryOf,geometryBounds,demoLocations,buildSubtiles,detailLevel,cameraView,zoomAt,startGesture,moveGesture,hospitalityFixture,hospitalityForRegion,NEED_TYPES} from './map-model.js';
+import {geometryOf,geometryBounds,demoLocations,buildSubtiles,detailLevel,cameraView,zoomAt as boundedZoom,fitMapCamera,startGesture,moveGesture,hospitalityFixture,hospitalityForRegion,NEED_TYPES} from './map-model.js';
 const $=s=>document.querySelector(s);
 const root=$('#houston-content'),status=$('#houston-status'),frame=$('#map-view');
 let data,svg,project,paths=new Map(),cells=new Map(),pois=[],mapSize={width:1000,height:700};
@@ -7,7 +7,7 @@ let activePoiId=null;
 let camera={x:400,y:315,zoom:1},level=-1,layer='assistance',filter='all',queue='priority',selected=null,loadId=0;
 let paintLayer,poiLayer,imagery,gesture=null,observer,renderFrame=0,animationFrame=0;
 const pointers=new Map(),detail=$('#map-detail'),tooltip=$('#map-tooltip');
-const mobile=()=>window.matchMedia('(max-width:760px)').matches;
+const mobile=()=>window.matchMedia('(max-width:760px), (max-height:520px)').matches;
 const sidebarWidth=()=>mobile()||frame.classList.contains('overview-collapsed')?0:document.querySelector('#operations-panel').getBoundingClientRect().right-frame.getBoundingClientRect().left+20;
 const parentHospitality=r=>cells.get(`${r.id}:0`)?.[0]?.hospitality||hospitalityFixture(`${r.id}/0/0/0`);
 function revealDetail(){detail.hidden=false;if(mobile()){frame.classList.remove('panel-open');$('#mobile-panel-toggle').setAttribute('aria-expanded','false');}}
@@ -18,6 +18,10 @@ const alpha=()=>Number($('#tile-opacity').value)/100;
 const polygons=value=>{const g=geometryOf(value);return g?.type==='Polygon'?[g.coordinates]:g?.type==='MultiPolygon'?g.coordinates:[];};
 function path(g){return polygons(g).flatMap(p=>p.map(r=>r.map((v,i)=>`${i?'L':'M'}${project(v).map(n=>n.toFixed(3)).join(',')}`).join('')+'Z')).join('');}
 function rectangle(bounds){const a=project([bounds[0],bounds[3]]),b=project([bounds[2],bounds[1]]);return {x:a[0],y:a[1],width:b[0]-a[0],height:b[1]-a[1]};}
+function footerHeight(){return document.querySelector('.map-footer').getBoundingClientRect().height||32;}
+function cityFitCamera(){return fitMapCamera(rectangle(data.city.bbox),mapSize.width,mapSize.height,{left:sidebarWidth(),bottom:footerHeight(),padding:24});}
+function minimumCameraZoom(){return Math.min(.4,cityFitCamera().zoom);}
+function zoomAt(current,factor,anchor){return boundedZoom(current,factor,anchor,minimumCameraZoom());}
 function screenPoint(x,y){const p=svg.createSVGPoint();p.x=x;p.y=y;return p.matrixTransform(svg.getScreenCTM().inverse());}
 function declutterLabels(unit){
   const v=cameraView(camera,mapSize.width,mapSize.height),occupied=[];
@@ -32,7 +36,7 @@ function declutterLabels(unit){
 function setCamera(next){
   camera=next;const v=cameraView(camera,mapSize.width,mapSize.height);
   svg.setAttribute('viewBox',`${v.x} ${v.y} ${v.width} ${v.height}`);
-  $('#map-zoom-in').disabled=camera.zoom>=24;$('#map-zoom-out').disabled=camera.zoom<=.4;
+  $('#map-zoom-in').disabled=camera.zoom>=24;$('#map-zoom-out').disabled=camera.zoom<=minimumCameraZoom()+1e-9;
   const nextLevel=detailLevel(camera.zoom);
   if(level!==nextLevel){level=nextLevel;renderTiles();}
   for(const marker of poiLayer.children)marker.setAttribute('transform',`translate(${marker.dataset.x} ${marker.dataset.y}) scale(${800/mapSize.width/camera.zoom})`);
@@ -50,15 +54,15 @@ function stopAnimation(){if(animationFrame)cancelAnimationFrame(animationFrame);
 function animateCamera(target){stopAnimation();if(window.matchMedia('(prefers-reduced-motion:reduce)').matches){setCamera(target);return;}const start={...camera},at=performance.now();const tick=now=>{const t=Math.min(1,(now-at)/220),ease=1-(1-t)**3;setCamera({x:start.x+(target.x-start.x)*ease,y:start.y+(target.y-start.y)*ease,zoom:start.zoom+(target.zoom-start.zoom)*ease});if(t<1)animationFrame=requestAnimationFrame(tick);else animationFrame=0;};animationFrame=requestAnimationFrame(tick);}
 function fitHouston(focus=false){
   stopAnimation();
-  if(!svg)return;const sidebar=sidebarWidth();
-  const zoom=Math.max(.4,Math.min((mapSize.width-sidebar-40)/mapSize.width,800*mapSize.height/mapSize.width/630)*.95);
-  setCamera({zoom,x:400-sidebar/2*800/mapSize.width/zoom,y:315});closeDetail();if(focus)svg.focus({preventScroll:true});
+  if(!svg)return;
+  setCamera(cityFitCamera());closeDetail();if(focus)svg.focus({preventScroll:true});
 }
 function focusBounds(bounds,zoomFloor=0){
   stopAnimation();
-  const r=rectangle(bounds),sidebar=sidebarWidth();
-  const zoom=Math.min(24,Math.max(zoomFloor,Math.min((mapSize.width-sidebar-110)/mapSize.width*800/r.width,(mapSize.height-130)/mapSize.width*800/r.height)));
-  setCamera({zoom:Math.max(.4,zoom),x:r.x+r.width/2-sidebar/2*800/mapSize.width/zoom,y:r.y+r.height/2});
+  const r=rectangle(bounds);
+  let next=fitMapCamera(r,mapSize.width,mapSize.height,{left:sidebarWidth(),bottom:footerHeight(),padding:38});
+  if(zoomFloor>next.zoom)next=zoomAt(next,zoomFloor/next.zoom,{x:r.x+r.width/2,y:r.y+r.height/2});
+  setCamera(next);
 }
 function closeDetail(){detail.hidden=true;selected=null;activePoiId=null;for(const p of poiLayer?.children||[])p.classList.remove('is-selected');reconcileAreas();updateBreadcrumb();}
 function showTooltip(item,event){
@@ -72,7 +76,7 @@ function areaData(region,cell=null){return cell||{...region,hospitality:parentHo
 function selectArea(region,cell=null,zoom=true){
   activePoiId=null;for(const p of poiLayer.children)p.classList.remove('is-selected');
   selected={region,cell};tooltip.hidden=true;
-  if(zoom)focusBounds(cell?.bounds||geometryBounds(region.geometry),cell?Math.max(5,camera.zoom*1.4):3);
+  if(zoom)focusBounds(cell?.bounds||geometryBounds(region.geometry),cell?Math.max(5,camera.zoom*1.4):0);
   reconcileAreas();updateBreadcrumb();
   const item=areaData(region,cell);revealDetail();
   const header=node('div','detail-heading'),copy=node('div');copy.append(node('div','micro-label',cell?'HOUSTON / SUBTILE':'HOUSTON / NEIGHBORHOOD'),node('h2','',item.name));
@@ -161,7 +165,7 @@ function initializeMap(){
   pointers.clear();gesture=null;bindGestures();observer=new ResizeObserver(entries=>{const r=entries[0].contentRect;if(r.width&&r.height){const changed=Math.abs(r.width-mapSize.width)>1||Math.abs(r.height-mapSize.height)>1;mapSize={width:r.width,height:r.height};if(changed&&detail.hidden)fitHouston();else setCamera(camera);}});observer.observe(frame);renderMetrics();renderPois();renderQueue();fitHouston();$('#map-source').textContent=`Houston city boundaries · ${basemap.attribution||'USGS / USDA NAIP'} · historical`;
 }
 function bindGestures(){
-  let suppressClick=false;const begin=()=>{gesture=startGesture(camera,[...pointers.values()],screenPoint,800/mapSize.width/camera.zoom);};
+  let suppressClick=false;const begin=()=>{gesture=startGesture(camera,[...pointers.values()],screenPoint,800/mapSize.width/camera.zoom,minimumCameraZoom());};
   svg.addEventListener('pointerdown',e=>{if(e.button!==0)return;stopAnimation();pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,target:e.target.closest('[data-region-id], [data-poi-id]')});begin();svg.setPointerCapture(e.pointerId);});
   svg.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId)||!gesture)return;pointers.set(e.pointerId,{...pointers.get(e.pointerId),x:e.clientX,y:e.clientY});const next=moveGesture(gesture,[...pointers.values()]);if(gesture.moved){tooltip.hidden=true;svg.classList.add('is-panning');if(renderFrame)cancelAnimationFrame(renderFrame);renderFrame=requestAnimationFrame(()=>{setCamera(next);renderFrame=0;});}});
   const end=(e,cancel=false)=>{

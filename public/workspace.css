@@ -210,3 +210,111 @@ html{scroll-behavior:auto}body{font-family:-apple-system,BlinkMacSystemFont,'Hel
 @media(max-width:760px){.map-footer{font-size:8px}.rail-link{font-size:9px}}
 
 @media(max-width:760px){.resource-options label{min-height:44px}}
+
+/* Bound the workspace to the viewport, including short and landscape windows. */
+.app-frame{grid-template-rows:minmax(0,1fr);min-height:0}
+main#main,.app-rail{min-height:0}
+.app-rail{overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.app-rail .rail-link{flex-shrink:0}
+.imagery-panel{max-height:calc(100% - 92px);overflow:auto;overscroll-behavior:contain}
+@media(min-width:761px){
+ #people-view,#messages-view{display:flex;flex-direction:column;overflow:hidden}
+ #people-view>.view-heading,#messages-view>.view-heading{flex:none}
+ #people-view>.view-body,#messages-view>.view-body{flex:1;min-height:0;width:100%;display:flex;flex-direction:column;overflow:hidden}
+ #people-workspace,#messages-workspace{flex:1;min-height:0;display:flex;flex-direction:column}
+ #people-workspace>.records-toolbar,#messages-workspace>.records-toolbar{flex:none}
+ #people-workspace>.people-layout,#messages-workspace>.messages-layout{flex:1;height:auto;min-height:0}
+ #people-view .workspace-footnote,#messages-view .workspace-footnote{flex:none}
+}
+@media(max-height:720px){
+ .operations-panel{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+ .operations-panel>.panel-search{position:sticky;top:0;z-index:2;background:#fff;flex:none}
+ .operations-panel>.operations-heading,.operations-panel>.overview-metrics,.operations-panel>.layer-section,.operations-panel>.panel-bottom{flex:none}
+ .operations-panel>.queue-section{flex:none;min-height:0;overflow:visible}
+ .operations-panel .queue-tabs{position:sticky;top:58px;z-index:1;background:#fff;flex:none}
+ .operations-panel .area-list{overflow:visible;min-height:50px;max-height:none;flex:none}
+ .view-heading{padding-top:21px;padding-bottom:19px}
+ .view-body{padding-top:20px;padding-bottom:20px}
+}
+@media(max-height:600px){
+ .map-detail{left:auto;right:68px;bottom:44px;width:min(300px,calc(100% - 90px));max-height:calc(100% - 112px);padding:15px}
+ .map-workspace:has(.map-detail:not([hidden])) .map-zoom-controls,.map-zoom-controls{bottom:44px}
+ .map-workspace:has(.map-detail:not([hidden])) .map-fit,.map-fit{bottom:156px}
+ .map-compass{display:none}
+ .map-detail .detail-breakdown{grid-template-columns:1fr auto}
+ .map-detail .detail-total{font-size:28px}
+ .map-detail .detail-heading h2{font-size:18px}
+ .imagery-panel{max-height:calc(100% - 90px)}
+}
+@media(max-height:520px) and (orientation:landscape){
+ .topbar{height:48px;padding-left:14px;padding-right:14px}
+ .app-frame{display:grid;grid-template-columns:64px minmax(0,1fr);height:calc(100dvh - 48px)}
+ .app-rail{height:auto;flex-direction:column;justify-content:flex-start;gap:3px;padding:9px 6px;border-top:0;border-right:1px solid var(--line)}
+ .app-rail .rail-link{flex:0 0 auto;min-height:44px;max-width:none;padding:6px 0;gap:3px;font-size:8px}
+ .app-rail .rail-link svg{width:18px;height:18px}
+ .rail-bottom{margin-top:0}
+ .rail-caption{display:none}
+ .operations-panel{top:62px;bottom:40px;width:280px;left:12px}
+ .operations-heading{padding-top:12px;padding-bottom:12px}
+ .operations-heading h1{font-size:20px}
+ .overview-metrics{padding-bottom:12px}
+ .overview-metrics strong{font-size:22px}
+ .map-top-controls{top:12px;right:12px}
+ .map-top-controls .control{min-height:40px}
+ .map-resolution{top:62px;right:12px}
+ .mobile-panel-toggle,.map-workspace.overview-collapsed .mobile-panel-toggle{top:12px;left:12px;min-height:40px}
+ .map-detail{right:68px;bottom:42px;max-height:calc(100% - 100px)}
+ .map-legend-card{bottom:42px}
+ .map-workspace:has(.map-detail:not([hidden])) .map-zoom-controls,.map-zoom-controls{bottom:42px;right:12px}
+ .map-workspace:has(.map-detail:not([hidden])) .map-fit,.map-fit{bottom:154px;right:12px}
+ .map-breadcrumb,.map-workspace.overview-collapsed .map-breadcrumb{top:62px;left:auto;right:12px;max-width:calc(100% - 330px)}
+ .view-heading{display:flex;align-items:center;gap:18px;padding:18px 22px}
+ .view-heading h1{font-size:23px}
+ .view-heading p{font-size:11px}
+ .view-heading .search-input{margin-top:0;width:220px;max-width:40%;min-height:44px;flex:none}
+ .view-heading .search-input input{font-size:14px}
+ .view-body{padding:16px 22px}
+ .casework-navigation{margin-bottom:13px}
+}
+@media(max-width:760px){
+ .messages-layout.is-detail .conversation-heading{position:sticky;top:0;z-index:2}
+ .people-layout.is-detail .mobile-record-back{position:sticky;top:0;z-index:2;background:#fff;box-shadow:0 6px 8px #fff}
+}
+
+@media(max-height:520px) and (orientation:landscape){
+ .operations-panel{display:none}
+ .map-workspace.panel-open .operations-panel{display:flex}
+ .mobile-panel-toggle{display:flex;position:absolute;z-index:5;box-shadow:var(--shadow)}
+ .desktop-panel-close{display:none}
+ .map-workspace.panel-open .map-detail{display:none}
+ .map-legend-card,.map-workspace.overview-collapsed .map-legend-card{left:12px}
+ .map-zoom-controls button{width:42px;height:44px}
+ .map-fit{width:44px;height:44px}
+}
+
+/* A short landscape window uses focused records instead of a clipped inbox. */
+@media(max-height:520px){
+ #people-view,#messages-view{display:block;overflow:auto}
+ #people-view>.view-body,#messages-view>.view-body{display:block;overflow:visible}
+ #people-workspace,#messages-workspace{display:block}
+ #people-workspace>.people-layout,#messages-workspace>.messages-layout{display:block;height:auto;min-height:0}
+ .people-list,.thread-list{overflow:visible;max-height:none;border-right:0;padding:8px 12px}
+ .people-layout:not(.is-detail) .person-record,.messages-layout:not(.is-detail) .conversation{display:none}
+ .people-layout.is-detail .people-list,.messages-layout.is-detail .thread-list{display:none}
+ .people-layout.is-detail .person-record{display:block;overflow:visible;padding:20px 24px}
+ .messages-layout.is-detail .conversation{display:flex;height:auto;min-height:220px}
+ .conversation-events{overflow:visible;max-height:none;min-height:180px;flex:none}
+ .conversation-heading{position:sticky;top:0;z-index:2;padding:16px 20px}
+ .conversation-heading h2{font-size:16px}
+ .conversation-footer{padding:14px 20px}
+ .mobile-record-back{display:inline-flex;align-items:center;gap:6px;margin:0 0 16px;min-height:36px}
+ .mobile-record-back svg{transform:rotate(180deg);height:14px;width:14px}
+ .conversation-heading .mobile-record-back{margin:0;padding:6px;width:30px;height:32px}
+ .person-record>.mobile-record-back{position:sticky;top:0;z-index:2;background:#fff;box-shadow:0 5px 7px #fff}
+ .record-filters .filter-chip{min-height:40px}
+ .view-heading .search-input input{font-size:16px}
+ #casework-view input:not([type=checkbox]),#casework-view textarea,#casework-view .forms-grid select{font-size:16px!important}
+}
+
+.map-canvas:focus{outline:none}
+.map-canvas:focus-visible{outline:2px solid #41684d;outline-offset:-3px}

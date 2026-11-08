@@ -141,23 +141,46 @@ export function cameraView(camera, width, height) {
   const w=800/camera.zoom,h=w*height/Math.max(1,width);
   return {x:camera.x-w/2,y:camera.y-h/2,width:w,height:h};
 }
-export function zoomAt(camera, factor, point={x:camera.x,y:camera.y}) {
+const minimumZoom=value=>Number.isFinite(value)&&value>0?Math.min(24,Math.max(.01,value)):.4;
+export function fitMapCamera(bounds,width,height,insets={}) {
+  const fallback=()=>({x:400,y:315,zoom:1});
+  if(!bounds||!['x','y','width','height'].every(key=>Number.isFinite(bounds[key]))||
+    bounds.width<=0||bounds.height<=0||!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0||
+    !insets||typeof insets!=='object'||Array.isArray(insets))return fallback();
+  const edges={};
+  for(const key of ['left','right','top','bottom','padding']){
+    const value=insets[key]??(key==='padding'?24:0);
+    if(!Number.isFinite(value)||value<0)return fallback();
+    edges[key]=value;
+  }
+  const usableWidth=width-edges.left-edges.right-2*edges.padding;
+  const usableHeight=height-edges.top-edges.bottom-2*edges.padding;
+  if(usableWidth<=0||usableHeight<=0)return fallback();
+  const scale=Math.min(usableWidth/bounds.width,usableHeight/bounds.height);
+  const zoom=Math.min(24,Math.max(.01,scale*800/width));
+  const unit=800/width/zoom;
+  const x=bounds.x+bounds.width/2-(edges.left-edges.right)/2*unit;
+  const y=bounds.y+bounds.height/2-(edges.top-edges.bottom)/2*unit;
+  return [x,y,zoom].every(Number.isFinite)?{x,y,zoom}:fallback();
+}
+export function zoomAt(camera, factor, point={x:camera.x,y:camera.y},minZoom=.4) {
+  const floor=minimumZoom(minZoom);
   const current={x:Number.isFinite(camera.x)?camera.x:400,y:Number.isFinite(camera.y)?camera.y:315,
-    zoom:Number.isFinite(camera.zoom)?Math.min(24,Math.max(.4,camera.zoom)):1};
+    zoom:Number.isFinite(camera.zoom)?Math.min(24,Math.max(floor,camera.zoom)):1};
   if(!Number.isFinite(factor)||factor<=0)return current;
   if(!point||!Number.isFinite(point.x)||!Number.isFinite(point.y))point=current;
-  const zoom=Math.min(24,Math.max(.4,current.zoom*factor));
+  const zoom=Math.min(24,Math.max(floor,current.zoom*factor));
   return {zoom,x:point.x-(point.x-current.x)*current.zoom/zoom,y:point.y-(point.y-current.y)*current.zoom/zoom};
 }
-export function startGesture(camera, points, worldPoint, unit) {
+export function startGesture(camera, points, worldPoint, unit,minZoom=.4) {
   const [a,b=a]=points,center={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
-  return {camera:{...camera},center,anchor:worldPoint(center.x,center.y),unit,distance:points.length>1?Math.hypot(a.x-b.x,a.y-b.y):0,moved:points.length>1};
+  return {camera:{...camera},center,anchor:worldPoint(center.x,center.y),unit,minZoom:minimumZoom(minZoom),distance:points.length>1?Math.hypot(a.x-b.x,a.y-b.y):0,moved:points.length>1};
 }
 export function moveGesture(gesture, points) {
   const [a,b=a]=points,center={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
   const dx=center.x-gesture.center.x,dy=center.y-gesture.center.y;
   if(Math.hypot(dx,dy)>5||points.length>1) gesture.moved=true;
   if(!gesture.moved)return gesture.camera;
-  const next=zoomAt(gesture.camera,points.length>1&&gesture.distance?Math.hypot(a.x-b.x,a.y-b.y)/gesture.distance:1,gesture.anchor);
+  const next=zoomAt(gesture.camera,points.length>1&&gesture.distance?Math.hypot(a.x-b.x,a.y-b.y)/gesture.distance:1,gesture.anchor,gesture.minZoom);
   return {...next,x:next.x-dx*gesture.unit*gesture.camera.zoom/next.zoom,y:next.y-dy*gesture.unit*gesture.camera.zoom/next.zoom};
 }

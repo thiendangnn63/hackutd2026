@@ -73,3 +73,18 @@ Successful intake and report navigation now follows an explicit local family-act
 Verification: syntax checks and 83 automated tests pass, including two new recipient-history regressions. Browser checks cover direct-name selection after a contextual match, filter/Back focus, post-submit heading focus, loading feedback, delayed-record-response protection with a real saved fictional case in the isolated in-memory server, unassigned CHECKIN history, Escape/focus return, offscreen POIs, selection clearing, narrow-screen control separation, and mobile input type size.
 
 Lessons: a quiet interface still needs readable captions and dependable touch targets. Navigation should follow confirmed action outcomes, not inferred differences between asynchronously loaded snapshots. A message belongs in its actual recipient’s history even when case assignment is unresolved.
+
+
+## Iteration 5 · viewport fit and long-session reading
+
+Short windows previously allowed the navigation rail to expand the main grid beyond its assigned height, and a fixed minimum zoom could clip Houston on wide displays. The grid now stays within the viewport; short Overview and imagery panels scroll instead of clipping their contents. Landscape windows use a compact rail and an optional Overview drawer. Short record views use focused list/detail navigation, with sticky Back/context controls, rather than a clipped conversation pane.
+
+Fit Houston now uses projected city bounds and actual usable viewport insets, including the overview width and attribution footer. Its zoom floor adapts to the fitted view; wheel/button/keyboard/pinch zoom retain their anchor behavior below the former 0.4 floor. Region focus uses the same bounds-fit helper. New camera regressions cover wide/short viewports, asymmetric insets, finite fallback behavior and low-floor gestures.
+
+People and Messages retain per-record/thread reading offsets across route changes and state refreshes. A thread reader already near the end follows new content; a reader inspecting an older message keeps that position. Explicit mobile selections reveal the heading/Back, and Back restores the list context. Person outgoing history defaults to twelve entries with a shown/total count and Show all / Show latest 12 controls; expanding reveals and focuses the first older entry. These view caches are local to the open page and are cleared by exercise reset.
+
+Validation: syntax checks and all 87 automated tests pass. Browser checks confirm full-city containment at 1024×600, 844×390, 667×375, 1920×540 and 2560×720; wide-window button and real touch pinch zoom; reachable scrollable landscape lists and facility cards; non-clipped short inboxes; retained reading offsets across Map round trips; preserved older-message reading after new input and end-following when appropriate; explicit 12-of-19 history expansion/collapse; and heading/Back visibility on mobile selection.
+
+The reset/cache check was performed only after the live 4174 process was verified to run createApp(new Store()) with a null persistence path. The owner's 4173 persisted exercise checksum was unchanged before/after; its cases were not reset. No public push, deployment, external provider call, or welfare/assistance contract change is part of this pass.
+
+Lessons: fit a map to its usable viewport rather than a fixed zoom floor. A short layout needs reachable scroll surfaces, not merely smaller typography. Updating data should preserve the user's reading position; history truncation needs an explicit route to older content.

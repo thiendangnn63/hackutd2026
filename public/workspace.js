@@ -3,10 +3,12 @@ import {searchPeople,messageThreads,caseEvents,outgoingForParticipant} from './r
 const $=s=>document.querySelector(s);
 let searchAnnouncement;
 function announceSearch(message){clearTimeout(searchAnnouncement);searchAnnouncement=setTimeout(()=>{$('#search-status').textContent=message;},180);}
-const mobile=()=>window.matchMedia('(max-width:760px)').matches;
+const recordLayout=window.matchMedia('(max-width:760px), (max-height:520px)');
+const mobile=()=>recordLayout.matches;
 let familyState=null,selectedPerson=null,selectedThread=null,archiveData=null,archiveId=null;
 let peopleScope='all',messageScope='all',personOpen=false,threadOpen=false,comparison=50;
 let recordsLoading=true,recordsLoadError='',stateRevision=0,stateRequest=0;
+const personReading=new Map(),threadReading=new Map(),listReading=new Map(),expandedHistories=new Set();
 const time=value=>{const d=new Date(value);return !value||Number.isNaN(d.valueOf())?'Time not recorded':new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(d)+' CT';};
 const subjectName=c=>Array.isArray(c.subjectNames)?c.subjectNames.join(' and '):c.subjectNames;
 const initials=name=>{const words=name.split(' · ')[0].split(/\s+/).filter(s=>!['and','&'].includes(s.toLowerCase()));return [words[0]?.[0],words.length>1?words.at(-1)[0]:''].join('').toUpperCase();};
@@ -21,7 +23,8 @@ function searchControls(){for(const input of [$('#person-search'),$('#message-se
 function openConversation(caseId){
   selectedThread=caseId;messageScope='all';threadOpen=true;
   $('#message-search').value='';$('#message-search').dispatchEvent(new Event('input'));threadOpen=true;
-  if(location.hash==='#messages')renderMessages();else location.hash='messages';
+  if(location.hash==='#messages')renderMessages();else{location.hash='messages';route();}
+  if(mobile())revealMobileDetail($('#messages-workspace'));
 }
 function openMessageLab(caseId){
   if(!caseId||caseId==='unassigned')return;
@@ -31,7 +34,14 @@ function openMessageLab(caseId){
 function route(){
   const hash=location.hash.slice(1)||'mayor',aliases={overview:'casework',family:'casework',simulator:'casework',assistance:'casework',satellite:'imagery'};
   const name=aliases[hash]||(['mayor','messages','people','casework','imagery'].includes(hash)?hash:'mayor');
-  for(const [id,view]of [['map-view','mayor'],['messages-view','messages'],['people-view','people'],['casework-view','casework'],['imagery-view','imagery']])$('#'+id).hidden=name!==view;
+  for(const [id,view]of [['map-view','mayor'],['messages-view','messages'],['people-view','people'],['casework-view','casework'],['imagery-view','imagery']]){
+    const element=$('#'+id);
+    if(!element.hidden&&name!==view){
+      const root=element.querySelector('#people-workspace, #messages-workspace');
+      if(root){rememberReading(root);rememberList(root,root.id==='people-workspace'?'.people-list':'.thread-list');for(const pane of root.querySelectorAll('[data-reading-ready]'))pane.dataset.readingReady='false';}
+    }
+    element.hidden=name!==view;
+  }
   for(const a of document.querySelectorAll('.rail-link')){if(a.dataset.view===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');}
   $('#imagery-panel').hidden=true;$('#imagery-toggle').setAttribute('aria-expanded','false');
   if(name==='people')renderPeople();if(name==='messages')renderMessages();if(name==='imagery')loadArchive();
@@ -50,30 +60,67 @@ function scopeToolbar(type,choices,current,change,total){
   }
   toolbar.append(group,node('span','results-count',`${count(total)} ${total===1?(type==='Records'?'record':'conversation'):type.toLowerCase()}`));return toolbar;
 }
-function rememberList(root,selector){const old=root.querySelector(selector),active=document.activeElement;return {scroll:old?.scrollTop||0,focus:old?.contains(active)?active.dataset.recordId:null};}
+function readingParts(root){
+  const people=root.id==='people-workspace',view=root.closest('.app-view'),detail=root.querySelector(people?'.person-record':'.conversation');
+  return {people,view,detail,layout:detail?.parentElement,id:detail?.dataset[people?'personId':'threadId'],cache:people?personReading:threadReading};
+}
+function rememberReading(root){
+  const parts=readingParts(root),{people,view,detail,layout,id,cache}=parts;
+  if(!detail||!id||view.hidden||detail.dataset.readingReady!=='true'||(mobile()&&!layout.classList.contains('is-detail')))return;
+  const scroller=mobile()?view:people?detail:detail.querySelector('.conversation-events');
+  const maximum=Math.max(0,scroller.scrollHeight-scroller.clientHeight),mode=mobile()?'mobile':'desktop';
+  cache.set(id,{...cache.get(id),[mode]:{top:scroller.scrollTop,atEnd:maximum-scroller.scrollTop<=40}});
+}
+function restoreReading(root){
+  const {people,view,detail,layout,id,cache}=readingParts(root);
+  if(!detail||view.hidden||(mobile()&&!layout.classList.contains('is-detail')))return;
+  const scroller=mobile()?view:people?detail:detail.querySelector('.conversation-events');
+  const saved=cache.get(id)?.[mobile()?'mobile':'desktop'],maximum=Math.max(0,scroller.scrollHeight-scroller.clientHeight);
+  scroller.scrollTop=saved?(!people&&saved.atEnd?maximum:Math.min(saved.top,maximum)):!people&&!mobile()?maximum:0;
+  detail.dataset.readingReady='true';
+  if(!mobile())scroller.addEventListener('scroll',()=>rememberReading(root),{passive:true});
+}
+function revealMobileDetail(root){
+  const {view,detail}=readingParts(root);if(!detail||view.hidden)return;
+  detail.focus({preventScroll:true});
+  view.scrollTop=Math.max(0,view.scrollTop+detail.getBoundingClientRect().top-view.getBoundingClientRect().top-12);
+  detail.dataset.readingReady='true';rememberReading(root);
+}
+function rememberList(root,selector){
+  const old=root.querySelector(selector),view=root.closest('.app-view'),active=document.activeElement;
+  const memory=listReading.get(root.id)||{scroll:0,outer:0};
+  if(old&&!view.hidden&&old.dataset.readingReady==='true'&&(!mobile()||!old.parentElement.classList.contains('is-detail'))){memory.scroll=old.scrollTop;memory.outer=view.scrollTop;listReading.set(root.id,memory);}
+  return {...memory,focus:old?.contains(active)?active.dataset.recordId:null};
+}
 function focusRecordRow(root,id){[...root.querySelectorAll('[data-record-id]')].find(e=>e.dataset.recordId===id)?.focus();}
 function recordsFeedback(root){
   root.setAttribute('aria-busy',String(recordsLoading));
   if(recordsLoading){const status=node('p','record-empty','Loading case records…');status.setAttribute('role','status');root.append(status);}
   else if(recordsLoadError)root.append(emptyState('Records unavailable',recordsLoadError,button('Try again',refreshState,'control')));
 }
-function restoreList(list,memory){list.scrollTop=memory.scroll;if(memory.focus){const row=[...list.querySelectorAll('[data-record-id]')].find(e=>e.dataset.recordId===memory.focus);row?.focus({preventScroll:true});}}
+function restoreList(list,memory){
+  const view=list.closest('.app-view');
+  if(view.hidden||(mobile()&&list.parentElement.classList.contains('is-detail')))return;
+  list.scrollTop=memory.scroll;view.scrollTop=memory.outer;list.dataset.readingReady='true';
+  if(memory.focus){const row=[...list.querySelectorAll('[data-record-id]')].find(e=>e.dataset.recordId===memory.focus);row?.focus({preventScroll:true});}
+}
 function renderPeople(queryChanged=false){
   const root=$('#people-workspace');
   if(!familyState){root.replaceChildren();recordsFeedback(root);return;}
-  const memory=rememberList(root,'.people-list'),query=$('#person-search').value;
+  const memory=rememberList(root,'.people-list'),query=$('#person-search').value;rememberReading(root);
+  if(queryChanged){memory.scroll=0;memory.outer=0;listReading.set(root.id,{scroll:0,outer:0});}
   const people=searchPeople(familyState,query,peopleScope);root.replaceChildren();recordsFeedback(root);
   root.append(scopeToolbar('Records',[['all','All records'],['inquiries','Family inquiries'],['community','Community']],peopleScope,value=>{peopleScope=value;personOpen=false;renderPeople();},people.length));
   if(!people.length){root.append(emptyState('No matching records','Try a name, last-known area, or phrase from a message.',query?button('Clear search',()=>clearSearch($('#person-search')),'control'):null));return;}
   if((queryChanged&&people[0].matchKind==='name')||!people.some(p=>p.id===selectedPerson))selectedPerson=people[0].id;
   const layout=node('div','people-layout'+(personOpen?' is-detail':'')),list=node('div','people-list');list.setAttribute('aria-label','Matching people');
   for(const p of people){
-    const b=button('',()=>{selectedPerson=p.id;personOpen=true;renderPeople();if(mobile())$('#people-workspace .person-record').focus({preventScroll:true});},'person-row');b.dataset.recordId=p.id;b.setAttribute('aria-pressed',String(p.id===selectedPerson));
+    const b=button('',()=>{selectedPerson=p.id;personOpen=true;renderPeople();if(mobile())revealMobileDetail(root);},'person-row');b.dataset.recordId=p.id;b.setAttribute('aria-pressed',String(p.id===selectedPerson));
     const copy=node('span','person-copy');copy.append(node('strong','',p.name),node('small','',`${p.kind}${p.caseIds.length?' · '+p.caseIds.join(', '):''}`));
     if(query&&p.matchKind==='related')copy.append(node('small','match-context','Matches in related case'));
     b.append(node('span','person-avatar',initials(p.name)),copy);if(p.welfare==='assistance_needed')b.append(node('i','needs-indicator'));list.append(b);
   }
-  const p=people.find(p=>p.id===selectedPerson),record=node('article','person-record');record.setAttribute('aria-label',`${p.name} record`);record.tabIndex=-1;
+  const p=people.find(p=>p.id===selectedPerson),record=node('article','person-record');record.setAttribute('aria-label',`${p.name} record`);record.tabIndex=-1;record.dataset.personId=p.id;record.dataset.readingReady='false';
   const back=button('',()=>{personOpen=false;renderPeople();focusRecordRow(root,selectedPerson);},'mobile-record-back text-button');back.append(icon('chevron'),document.createTextNode('All people'));record.append(back);
   const heading=node('div','record-profile'),copy=node('div');copy.append(node('div','view-kicker',p.kind),node('h2','',p.name));heading.append(node('div','person-avatar',initials(p.name)),copy);record.append(heading);
   const meta=node('div','person-meta');meta.append(pill(`Welfare: ${title(p.welfare)}`,welfareTone(p.welfare)),pill(title(p.location)));if(p.participantId)meta.append(pill(p.description.startsWith('Opted out')?'Outreach off':'Outreach opted in'));record.append(meta,node('p','record-description',p.description));
@@ -91,25 +138,37 @@ function renderPeople(queryChanged=false){
   if(!reports.length)evidence.append(node('p','record-empty',p.participantId?'No contributed reports are recorded.':'No sightings or reports have been recorded.'));record.append(evidence);
   const messages=node('section','record-section');messages.append(node('h3','',p.participantId?'Messages to this participant':'Related messages'));
   const events=(p.participantId?outgoingForParticipant(familyState,p.participantId):p.caseIds.flatMap(id=>caseEvents(familyState,id)).filter(e=>e.direction==='outgoing')).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at));
-  for(const e of events.slice(0,12))messages.append(recordEvent(`${title(e.kind)} · to ${e.name}`,e.text,e.at,'Simulated · no delivery'));
+  const expanded=expandedHistories.has(p.id),shown=expanded?events.length:Math.min(12,events.length);
+  if(events.length)messages.append(node('p','workspace-note',`${shown} of ${events.length} messages shown · newest first`));
+  for(const e of events.slice(0,shown)){const event=recordEvent(`${title(e.kind)} · to ${e.name}`,e.text,e.at,'Simulated · no delivery');event.dataset.messageId=e.id;messages.append(event);}
+  if(events.length>12){
+    const toggle=button(expanded?'Show latest 12':`Show all ${events.length} messages`,()=>{
+      const nextId=expanded?null:events[shown]?.id;
+      if(expanded)expandedHistories.delete(p.id);else expandedHistories.add(p.id);
+      renderPeople();
+      const target=nextId?[...root.querySelectorAll('[data-message-id]')].find(e=>e.dataset.messageId===nextId):root.querySelector('[data-history-toggle]');
+      if(target){if(nextId)target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:'nearest'});}
+    },'text-button');toggle.dataset.historyToggle=p.id;messages.append(toggle);
+  }
   if(!events.length)messages.append(node('p','record-empty','No simulated messages are recorded.'));record.append(messages,node('p','record-disclaimer','Fictional exercise. A person’s report, location, welfare, and assistance needs are separate facts.'));
-  layout.append(list,record);root.append(layout);restoreList(list,memory);
+  layout.append(list,record);root.append(layout);restoreList(list,memory);restoreReading(root);
 }
-function renderMessages(){
+function renderMessages(queryChanged=false){
   const root=$('#messages-workspace');
   if(!familyState){root.replaceChildren();recordsFeedback(root);return;}
-  const memory=rememberList(root,'.thread-list'),query=$('#message-search').value;
+  const memory=rememberList(root,'.thread-list'),query=$('#message-search').value;rememberReading(root);
+  if(queryChanged){memory.scroll=0;memory.outer=0;listReading.set(root.id,{scroll:0,outer:0});}
   const threads=messageThreads(familyState,query,messageScope);root.replaceChildren();recordsFeedback(root);
   root.append(scopeToolbar('Conversations',[['all','All conversations'],['follow_up','Needs follow-up']],messageScope,value=>{messageScope=value;threadOpen=false;renderMessages();},threads.length));
   if(!threads.length){root.append(emptyState('No matching conversations','Try a family name, case number, or phrase from a report.',query?button('Clear search',()=>clearSearch($('#message-search')),'control'):button('Open Casework',()=>{location.hash='casework';},'control')));return;}
   if(!threads.some(c=>c.id===selectedThread))selectedThread=threads[0].id;
   const layout=node('div','messages-layout'+(threadOpen?' is-detail':'')),list=node('div','thread-list');list.setAttribute('aria-label','Case conversations');
   for(const c of threads){
-    const b=button('',()=>{selectedThread=c.id;threadOpen=true;renderMessages();if(mobile())$('#messages-workspace .conversation').focus({preventScroll:true});},'thread-row');b.dataset.recordId=c.id;b.setAttribute('aria-pressed',String(selectedThread===c.id));
+    const b=button('',()=>{selectedThread=c.id;threadOpen=true;renderMessages();if(mobile())revealMobileDetail(root);},'thread-row');b.dataset.recordId=c.id;b.setAttribute('aria-pressed',String(selectedThread===c.id));
     const head=node('span','thread-row-heading');head.append(node('strong','',subjectName(c)),node('span','thread-event-count',count(c.events.length)));b.append(head,node('small','',`${c.id==='unassigned'?'Human review':c.id} · ${title(c.reviewState)}`));
     b.append(node('p','thread-preview',c.events.length?c.events.at(-1).text:'No messages received. Follow-up is still needed.'));list.append(b);
   }
-  const c=threads.find(c=>c.id===selectedThread),conversation=node('article','conversation');conversation.tabIndex=-1;
+  const c=threads.find(c=>c.id===selectedThread),conversation=node('article','conversation');conversation.tabIndex=-1;conversation.dataset.threadId=c.id;conversation.dataset.readingReady='false';
   const head=node('div','conversation-heading'),copy=node('div'),back=button('',()=>{threadOpen=false;renderMessages();focusRecordRow(root,selectedThread);},'mobile-record-back icon-button');back.setAttribute('aria-label','Back to conversations');back.append(icon('chevron'));copy.append(node('h2','',subjectName(c)),node('p','',`${c.id==='unassigned'?'Unassigned reports':c.id+' · Oak District'} · ${c.events.length} ${c.events.length===1?'message':'messages'}`));head.append(back,copy,pill(c.reviewState==='resolved'?'Reviewed':c.id==='unassigned'?'Needs clarification':'Follow-up',c.reviewState==='resolved'?'green':'amber'));conversation.append(head);
   const body=node('div','conversation-events');let lastDay='';
   for(const e of c.events){const eventDay=time(e.receivedAt||e.at).split(',')[0];if(eventDay!==lastDay){body.append(node('div','conversation-date',eventDay));lastDay=eventDay;}
@@ -117,7 +176,7 @@ function renderMessages(){
   }
   if(!c.events.length)body.append(emptyState('Waiting for the first message','This case remains open. Queue an inquiry or simulate an incoming report in Casework.',button('Open Casework',()=>{location.hash='casework';},'control')));
   conversation.append(body);const foot=node('div','conversation-footer');foot.append(node('span','',c.id==='unassigned'?'These raw reports have no established case. Keep them in human review.':'Local simulation · no external messages are sent.'));
-  if(c.id!=='unassigned')foot.append(button('Open message lab',()=>openMessageLab(c.id),'control'));conversation.append(foot);layout.append(list,conversation);root.append(layout);restoreList(list,memory);
+  if(c.id!=='unassigned')foot.append(button('Open message lab',()=>openMessageLab(c.id),'control'));conversation.append(foot);layout.append(list,conversation);root.append(layout);restoreList(list,memory);restoreReading(root);
 }
 async function loadArchive(force=false){
   const root=$('#archive-workspace');if(archiveData&&!force){renderArchive();return;}root.replaceChildren(node('p','record-empty','Loading the historical archive…'));
@@ -148,6 +207,7 @@ document.addEventListener('family-state-changed',e=>{
   stateRevision++;familyState=e.detail;recordsLoading=false;recordsLoadError='';renderPeople();renderMessages();
 });
 document.addEventListener('family-action-complete',e=>{
+  if(e.detail.path==='/api/reset'){personReading.clear();threadReading.clear();listReading.clear();expandedHistories.clear();return;}
   if(e.detail.duplicate)return;
   if((e.detail.path==='/api/cases'&&location.hash==='#family')||(e.detail.path==='/api/reports'&&location.hash==='#simulator')){
     location.hash='casework';route();requestAnimationFrame(focusCaseReview);
@@ -165,4 +225,8 @@ async function refreshState(){
   }catch(e){if(requestId===stateRequest&&revision===stateRevision)recordsLoadError=e.message;}
   finally{if(requestId===stateRequest&&revision===stateRevision){recordsLoading=false;renderPeople();renderMessages();}}
 }
-$('#person-search').addEventListener('input',()=>{personOpen=false;renderPeople(true);announceSearch($('#people-workspace .results-count')?.textContent||'No matching records.');});$('#message-search').addEventListener('input',()=>{threadOpen=false;renderMessages();announceSearch($('#messages-workspace .results-count')?.textContent||'No matching conversations.');});window.addEventListener('hashchange',route);$('#fill-example').addEventListener('click',()=>{location.hash='family';route();$('#example').click();});for(const el of document.querySelectorAll('[data-icon]'))el.replaceChildren(icon(el.dataset.icon));searchControls();route();refreshState();
+$('#person-search').addEventListener('input',()=>{personOpen=false;renderPeople(true);announceSearch($('#people-workspace .results-count')?.textContent||'No matching records.');});$('#message-search').addEventListener('input',()=>{threadOpen=false;renderMessages(true);announceSearch($('#messages-workspace .results-count')?.textContent||'No matching conversations.');});window.addEventListener('hashchange',route);$('#fill-example').addEventListener('click',()=>{location.hash='family';route();$('#example').click();});for(const el of document.querySelectorAll('[data-icon]'))el.replaceChildren(icon(el.dataset.icon));searchControls();route();refreshState();
+
+for(const id of ['people','messages'])$('#'+id+'-view').addEventListener('scroll',()=>{const root=$('#'+id+'-workspace');rememberReading(root);rememberList(root,id==='people'?'.people-list':'.thread-list');},{passive:true});
+
+recordLayout.addEventListener('change',()=>{for(const id of ['people-workspace','messages-workspace'])for(const pane of $('#'+id).querySelectorAll('[data-reading-ready]'))pane.dataset.readingReady='false';renderPeople();renderMessages();});
