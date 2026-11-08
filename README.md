@@ -134,3 +134,8 @@ With the existing Python environment, install Shapely from the official PyPI reg
 With the existing Python environment, `.venv/bin/python scripts/prepare_context_imagery.py --offline-check` decodes the three context rasters and validates their recorded dimensions and SHA-256 checksums without network access.
 
 For source methods, coverage, native sampling, numeric index encoding and offline verification commands, see [Houston imagery provenance](docs/HOUSTON_DATA.md). The checked-in reference detail pyramid is approximately 245 MiB; raw satellite COGs and provider tile caches remain outside the repository.
+
+
+## Provider connection preparation
+
+Photon 2 and Nemotron clients are fixture-tested in `src/photon-client.js` and `src/nemotron-client.js`. They are inactive and not wired to the app. The normal family exercise stays offline, text extraction remains simulated, and real sending remains disabled. The [integration notes](docs/INTEGRATIONS.md#inactive-provider-clients--november-8-preparation) describe the tested contracts and the remaining authenticated end-to-end acceptance.
