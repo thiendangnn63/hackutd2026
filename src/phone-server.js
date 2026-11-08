@@ -81,7 +81,7 @@ async function main(){
     session=preparePhoneServer(parsePhoneArgs(process.argv.slice(2)));
     await new Promise((resolveListen,reject)=>{session.app.once('error',reject);session.app.listen(session.port,'127.0.0.1',resolveListen);});
     console.log(`Beacon phone test: http://127.0.0.1:${session.port}\nProvider polling, interpretation and replies require explicit local actions.`);
-    const close=()=>{void shutdownPhoneServer(session);};process.once('SIGINT',close);process.once('SIGTERM',close);
+    let stopping=false;const close=()=>{if(stopping)return;stopping=true;void shutdownPhoneServer(session);};process.on('SIGINT',close);process.on('SIGTERM',close);
   }catch(error){await session?.release();console.error(error?.code==='EADDRINUSE'?'The local port is in use. Stop the normal Beacon server before starting the phone test.':error instanceof PhoneRuntimeError?error.message:'The approved phone test could not start.');process.exitCode=1;}
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))await main();

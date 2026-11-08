@@ -1,6 +1,6 @@
 # Release verification
 
-## Final source gate
+## Initial public release
 
 | Check | Final release result |
 | --- | --- |
@@ -8,7 +8,24 @@
 | Full Node suite, `npm test` | 549 tests passed, zero failed. |
 | Source whitespace, `git diff --check` | Clean. |
 | Python checks | 40 passed, including 31 imagery, geometry, model import and water-change checks and nine training tests. |
-| Public release and downloadable model | Planned release tag `beacon-demo-2026-11-08`. Verify the tag, public source tree and downloaded ZIP hash after publication. [Release](https://github.com/thiendangnn63/hackutd2026/releases/tag/beacon-demo-2026-11-08) |
+| Public release and downloadable model | Published tag `beacon-demo-2026-11-08` resolves to reviewed source `d65fd59b79d99aa9449217b244176c72e167274f`. At initial publication, both `main` and `codex/beacon-demo` pointed to that commit. The model ZIP was downloaded from the public release and its SHA-256 matched the model card. [Release](https://github.com/thiendangnn63/hackutd2026/releases/tag/beacon-demo-2026-11-08) |
+
+## Fresh public checkout
+
+A fresh clone of the public repository passed all 549 Node tests and 80 JavaScript syntax checks. The rehearsal started successfully with the checked-in assets. Pressing Ctrl-C through npm reproduced a stale local server lock twice. The initial tag remains immutable.
+
+## Shutdown patch
+
+The patch release target is `beacon-demo-2026-11-08.1`. Both the rehearsal and live-test launchers handle repeated termination signals idempotently so that the first shutdown can finish releasing its lock. Two subprocess regressions exercise this behavior. A real terminal run of `npm run demo` followed by Ctrl-C exited with status 0 and removed the lock.
+
+| Patch source check | Verified result |
+| --- | --- |
+| JavaScript syntax and package metadata | 81 JavaScript files passed. Package metadata passed. |
+| Full Node suite | 551 tests passed, zero failed. |
+| Python checks | All 40 passed across imagery, geometry, model import, water change and training. |
+| Source whitespace | `git diff --check` passed. |
+
+The initial public tag and its model download retain the source and checksum listed above. The patch preserves the saved exercise and keeps the provider integration inactive during rehearsal.
 
 ## Verification details
 

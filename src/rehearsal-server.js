@@ -36,7 +36,7 @@ async function main(){
     session=prepareRehearsalServer({port});
     await new Promise((done,reject)=>{session.app.once('error',reject);session.app.listen(port,'127.0.0.1',done);});
     console.log(`Beacon rehearsal: http://127.0.0.1:${port}/#mayor\nFictional phone, local scripted interpretation, no provider calls or spend.\nOpen Casework to rehearse a report; Reset exercise starts a fresh rehearsal.`);
-    const close=()=>{void shutdownPhoneServer(session);};process.once('SIGINT',close);process.once('SIGTERM',close);
+    let stopping=false;const close=()=>{if(stopping)return;stopping=true;void shutdownPhoneServer(session);};process.on('SIGINT',close);process.on('SIGTERM',close);
   }catch(error){await session?.release();console.error(error.code==='EADDRINUSE'?'Stop the other Beacon server on this port before starting the rehearsal.':error.message);process.exitCode=1;}
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))await main();
