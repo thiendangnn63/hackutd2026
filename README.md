@@ -34,6 +34,8 @@ Open **http://127.0.0.1:4173/#mayor** for Beacon’s dark glass workspace. The o
 
 Historical water imagery may cross municipal boundaries; the current fictional request fixture and totals remain Houston-only. A broader incident coordination queue across jurisdictions is an accepted product direction, not an implemented provider workflow.
 
+Optical imagery shows observation coverage for the current map view, excluding the open Overview panel and footer. A cloud-covered or missing observation is labeled unknown. A **Try Aug 30 / Sep 1** action appears only for a clearly better available response-date capture; clicking changes the date without panning. Dates never change automatically. Zero opacity, missing coverage metadata and failed source images have separate feedback and recovery actions.
+
 Subtile report locations are deterministic synthetic fixtures inside the official neighborhood geometry. Every neighborhood total and overlapping need-category count is conserved at both detail levels. Empty cells and city holes remain clipped out. These coordinates are not real geocoded reports. For implementation details and verified behavior, see [UI workspace notes](docs/UI_WORKSPACE.md).
 
 Casework has dedicated **Case review**, **New inquiry**, **Message lab**, and **Assistance** views. Successful intake and report submission return to the review queue, preserving the selected case.

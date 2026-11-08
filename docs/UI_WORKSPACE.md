@@ -133,3 +133,14 @@ Messages/People preserve focused controls across same-record refreshes and compa
 Validation: syntax checks and 148 Node tests pass. All eleven NOAA images decode and match recorded hashes, bounds, dates and reprojection limits; all 800 newly cached source tiles match their digests. Browser checks cover unchanged legend text through both subdivision levels, default radar, direct visible flood imagery, true ~0.5 m loading, closer street zoom, sharper reference tiles under radar, reachable 320/390px controls, focus/reading continuity, failed-image retry, two-image readiness, and pair/73% comparison retention through temporary unavailability. The saved main exercise is unchanged.
 
 Lessons: a stable legend needs a stable color scale. Clear-observation coverage must be evaluated at the area and date being inspected. Reference imagery beneath a masked observation can look dry while the flood status is unknown. A closer camera needs both a higher zoom ceiling and real finer source pixels.
+
+
+## Iteration 9 · local observation gaps and explicit recovery
+
+Optical modes now report usable observations for the map rectangle being inspected, excluding the open Overview panel and footer. No-observation and outside-capture views identify reference context as unknown flood status. A clearly better available response-date capture can be selected explicitly without moving the camera; the clearer pre-Harvey capture is never silently substituted. Zero opacity exposes Show imagery; failed coverage metadata and source images have separate retry feedback. Both imagery groups share opacity state.
+
+Show flooding chooses an available NOAA detail when Barker is missing, disables when no detail or map is ready, and remains a separate label-collision obstacle on compact maps. Short-window captions reserve the zoom/fit column; narrow short windows retain the date and44px recovery action without covering the footer.
+
+Validation: syntax checks and159 Node tests pass. All three coverage summaries reproduce byte-for-byte from their source index masks offline. Browser fault checks on the RAM-only4174 server cover coverage503 retry, image failure/retry, partial/missing NOAA hotspots, scenario503 readiness/recovery, opacity0 and synchronized recovery, outside-capture panning, and explicit date changes with unchanged viewBox. Barker September1 correctly has no clear observation; Try Aug30 yields about68% of the unobscured desktop view. Checks at844×390,600×390,320×568 and320×390 retain reachable controls; the smallest no-observation caption does not overlap fit, zoom or the footer. Saved main exercise data and provider integrations remain unchanged.
+
+Lesson: an image footprint and a loaded file do not establish a usable observation at the place being inspected. Coverage feedback must describe the current date/view and preserve an explicit distinction between missing observation and dry ground.

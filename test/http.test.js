@@ -48,10 +48,10 @@ test('HTTP validates JSON shape, content type, size and fields without partial c
 });
 test('static allowlist never exposes source, secrets, persisted state or traversal targets',async t=>{
   const {call}=await server(t);
-  for(const path of ['/src/server.js','/.env','/.env.example','/.data/state.json','/AGENTS.md','/package.json','/../src/server.js','/%2e%2e/src/server.js','/%2e%2e%2fsrc%2fserver.js','/styles.css/../../.env']) {
+  for(const path of ['/src/server.js','/.env','/.env.example','/.data/state.json','/AGENTS.md','/package.json','/../src/server.js','/%2e%2e/src/server.js','/%2e%2e%2fsrc%2fserver.js','/styles.css/../../.env','/data/houston-observation-coverage.json/extra','/data/observation-coverage/other.json']) {
     const r=await call(path);assert.equal(r.status,404,path);assert.deepEqual(r.data,{error:'Not found.'});assert.doesNotMatch(r.text,/\/Users\/|secret|createServer/);
   }
-  for(const path of ['/','/app.js','/styles.css']) {const r=await call(path);assert.equal(r.status,200,path);assert.equal(r.headers['cache-control'],'no-store');assert.equal(r.headers['x-content-type-options'],'nosniff');assert.match(r.headers['content-security-policy'],/frame-ancestors 'none'/);}
+  for(const path of ['/','/app.js','/styles.css','/map-coverage.js','/observation-view.js','/data/houston-observation-coverage.json']) {const r=await call(path);assert.equal(r.status,200,path);assert.equal(r.headers['cache-control'],'no-store');assert.equal(r.headers['x-content-type-options'],'nosniff');assert.match(r.headers['content-security-policy'],/frame-ancestors 'none'/);}
   assert.equal((await call('/api/state',{method:'DELETE'})).status,404);
 });
 test('storage failure returns generic error without state mutation or path disclosure',async t=>{
