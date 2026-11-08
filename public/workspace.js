@@ -32,6 +32,7 @@ function route(){
   for(const a of document.querySelectorAll('.rail-link')){if(a.dataset.view===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');}
   $('#imagery-panel').hidden=true;$('#imagery-toggle').setAttribute('aria-expanded','false');
   if(name==='people')renderPeople();if(name==='messages')renderMessages();if(name==='imagery')loadArchive();
+  if(name==='casework'){const section=hash==='family'?'intake':hash==='simulator'?'lab':hash==='assistance'?'assistance':'review';$('#casework-view').dataset.section=section;for(const a of document.querySelectorAll('.casework-navigation a')){if(a.dataset.section===section)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');}}
   if(aliases[hash])requestAnimationFrame(()=>$('#'+hash)?.scrollIntoView({block:'start'}));
   document.title=`${name==='mayor'?'Houston map':title(name)} · Family Response`;
 }
@@ -125,6 +126,6 @@ function renderArchive(){
   root.append(node('p','archive-credit','Historical xBD / xView2 · Maxar imagery · Gupta et al., DIU, CMU SEI and collaborators · CC BY-NC-SA 4.0. Individual capture dates and geographic placement on the Houston dashboard are not established.'));
   if(restoreFocus)select.focus({preventScroll:true});
 }
-document.addEventListener('family-state-changed',e=>{familyState=e.detail;renderPeople();renderMessages();});
+document.addEventListener('family-state-changed',e=>{const previous=familyState;familyState=e.detail;renderPeople();renderMessages();if(previous&&((location.hash==='#family'&&familyState.cases.length>previous.cases.length)||(location.hash==='#simulator'&&familyState.reports.length>previous.reports.length))){location.hash='casework';}});
 async function refreshState(){try{const r=await fetch('/api/state');if(!r.ok)throw new Error('Case records could not be loaded.');familyState=await r.json();renderPeople();renderMessages();}catch(e){for(const id of ['people-workspace','messages-workspace'])$('#'+id).replaceChildren(emptyState('Records unavailable',e.message,button('Try again',refreshState,'control')));}}
-$('#person-search').addEventListener('input',()=>{personOpen=false;renderPeople();});$('#message-search').addEventListener('input',()=>{threadOpen=false;renderMessages();});window.addEventListener('hashchange',route);$('#fill-example').addEventListener('click',()=>$('#example').click());for(const el of document.querySelectorAll('[data-icon]'))el.replaceChildren(icon(el.dataset.icon));searchControls();route();refreshState();
+$('#person-search').addEventListener('input',()=>{personOpen=false;renderPeople();});$('#message-search').addEventListener('input',()=>{threadOpen=false;renderMessages();});window.addEventListener('hashchange',route);$('#fill-example').addEventListener('click',()=>{location.hash='family';route();$('#example').click();});for(const el of document.querySelectorAll('[data-icon]'))el.replaceChildren(icon(el.dataset.icon));searchControls();route();refreshState();

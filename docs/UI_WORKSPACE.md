@@ -47,3 +47,14 @@ The owner requested an ongoing review → improve → verify loop. This pass imp
 Staged validation: syntax checks and all 81 automated tests pass. Browser regression checks cover stale-filter links, case context in the lab, raw unassigned reports, keyboard-focus preservation, mobile list/detail/back navigation, hidden Overview reopening, mobile unlocated cards, retained basemap choice, zero-opacity overlays, offscreen tab exclusions, and retained imagery comparison position. Tests use an isolated in-memory exercise; the owner's saved cases remain untouched.
 
 Lessons: review state belongs to the named case subjects, not every participant linked to the case. Cross-tab navigation must carry explicit case context. Map redraws must reconcile selection and keyboard state. A hierarchy must aggregate fixed data rather than generate unrelated values at each detail level.
+
+
+## Iteration 3 · facility discovery and focused Casework
+
+The Places map list makes all six enabled fictional facilities accessible alongside the marker layer. Map search matches facility names, resources and neighborhood names, and Enter opens the first result. Markers expose names on hover/focus, retain selected highlighting, and keep their card open across viewport resizing.
+
+Casework now separates review, new inquiry, the message lab, and assistance into explicit section links. The existing supplied example reveals the intake view. Successful new-case and raw-report submissions return to case review after the state update; the lab keeps its selected case. Duplicate reset actions were reduced to the header control while preserving the existing confirmation flow.
+
+Browser verification covers facility search and category filtering, desktop/mobile facility cards, each Casework section, and a complete new C106 fictional grandparents flow: intake → automatic case review → scoped outreach → message lab for C106 → received report → automatic evidence review. Location remains an unverified sighting and welfare remains unknown. No new domain state, provider integration, dispatch, or external map request is introduced.
+
+Lesson: a map marker needs an equivalent searchable list entry; a case workflow should navigate through focused tasks while preserving case context.
