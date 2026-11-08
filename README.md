@@ -76,6 +76,8 @@ The current dataset is a fixed demonstration, not live intake or location assign
 
 ## Architecture
 
+The [project structure guide](docs/PROJECT_STRUCTURE.md) maps each workflow to its entry points, source files and tests.
+
 - `src/domain.js`: fixtures, validation, recipient policy, case transitions, deterministic commands, explicitly simulated extraction, and outbox.
 - `src/store.js`: atomic local JSON persistence. A failed action does not partially mutate the state. File writes are restricted to owner access.
 - `src/server.js`: local HTTP API and static app. Same-origin mutations, strict loopback Host validation, body limits, and restrictive browser security headers.
